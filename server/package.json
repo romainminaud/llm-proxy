@@ -1,0 +1,31 @@
+{
+  "name": "llm-proxy",
+  "version": "1.0.0",
+  "description": "LLM proxy interceptor for logging, analyzing, and replaying OpenAI requests",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "test": "tsx --test",
+    "test:pricing": "tsx --test test/pricing.test.ts",
+    "test:db": "tsx --test test/db.test.ts",
+    "test:server": "tsx --test test/server.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src test",
+    "lint:fix": "eslint src test --fix"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/express": "^4.17.23",
+    "@types/node": "^22.10.1",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^9.39.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.54.0"
+  }
+}

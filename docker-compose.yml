@@ -1,0 +1,12 @@
+services:
+  llm-proxy:
+    build: .
+    ports:
+      - "8090:8090"  # Proxy server
+      - "3000:3000"  # Frontend dashboard
+    volumes:
+      - ./data:/app/server/data/requests
+    environment:
+      - PORT=8090
+      - NODE_ENV=production
+    restart: unless-stopped

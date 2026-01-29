@@ -1,0 +1,10 @@
+{
+  "name": "llm-proxy",
+  "version": "1.0.0",
+  "description": "LLM proxy interceptor for logging, analyzing, and replaying OpenAI requests",
+  "scripts": {
+    "server": "npm start --prefix server",
+    "frontend": "npm run dev --prefix frontend",
+    "dev": "npm run server & npm run frontend"
+  }
+}
