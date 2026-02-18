@@ -248,6 +248,140 @@ kubectl apply -f k8s/
 
 ## Cloud Platform Deployment
 
+### DigitalOcean (Recommended for simplicity)
+
+#### One-Click Deploy to App Platform
+
+[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/YOUR_USERNAME/proxy/tree/main)
+
+This uses the `.do/app.yaml` spec in the repo. It provisions the app with a persistent volume for the SQLite database automatically.
+
+> Replace `YOUR_USERNAME` in the button URL with your GitHub username after forking the repo.
+
+---
+
+DigitalOcean Droplets are the easiest way to get LLM Proxy running on a VPS with full control.
+
+#### 1. Create a Droplet
+
+- Choose **Ubuntu 24.04 LTS**
+- Size: **Basic, 1 GB RAM / 1 vCPU** is enough to start ($6/month)
+- Enable **SSH key** authentication
+
+#### 2. Install Docker
+
+```bash
+# SSH into your droplet
+ssh root@YOUR_DROPLET_IP
+
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+
+# Add your user to the docker group (if not root)
+usermod -aG docker $USER
+```
+
+#### 3. Clone and Configure
+
+```bash
+git clone https://github.com/YOUR_USERNAME/proxy.git
+cd proxy
+
+cp .env.example .env
+nano .env
+```
+
+Minimal `.env` for production:
+
+```bash
+NODE_ENV=production
+LOG_LEVEL=warn
+TRUST_PROXY=true
+CORS_ORIGIN=https://your-domain.com
+```
+
+#### 4. Start with Docker Compose
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+The app is now running on ports `8090` (API) and `3000` (frontend).
+
+#### 5. Set Up a Domain and HTTPS with Caddy
+
+Caddy automatically handles TLS certificates via Let's Encrypt.
+
+```bash
+apt install -y caddy
+```
+
+Create `/etc/caddy/Caddyfile`:
+
+```caddyfile
+your-domain.com {
+    handle /v1/* { reverse_proxy localhost:8090 }
+    handle /anthropic/* { reverse_proxy localhost:8090 }
+    handle /gemini/* { reverse_proxy localhost:8090 }
+    handle /api/* { reverse_proxy localhost:8090 }
+    handle /health { reverse_proxy localhost:8090 }
+    handle /ready { reverse_proxy localhost:8090 }
+    handle { reverse_proxy localhost:3000 }
+}
+```
+
+```bash
+systemctl reload caddy
+```
+
+Your proxy is now live at `https://your-domain.com`.
+
+#### 6. Open Firewall Ports
+
+```bash
+ufw allow OpenSSH
+ufw allow 80
+ufw allow 443
+ufw enable
+```
+
+#### Enable Auto-restart on Reboot
+
+```bash
+# Create a systemd service
+cat > /etc/systemd/system/llm-proxy.service << 'EOF'
+[Unit]
+Description=LLM Proxy
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/root/proxy
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+ExecStop=/usr/bin/docker compose down
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable llm-proxy
+systemctl start llm-proxy
+```
+
+#### DigitalOcean App Platform (Alternative)
+
+For a fully managed option with no server maintenance:
+
+1. Push your repo to GitHub
+2. Go to [DigitalOcean App Platform](https://cloud.digitalocean.com/apps)
+3. Connect your repo and select the `Dockerfile`
+4. Set environment variables (`NODE_ENV=production`, etc.)
+5. Add a **persistent storage** volume mounted at `/app/server/data`
+6. Deploy
+
+Note: App Platform is stateless by default — the persistent volume is required to retain the SQLite database across deploys.
+
 ### AWS ECS
 
 1. Push image to ECR:

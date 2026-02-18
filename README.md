@@ -13,6 +13,12 @@ A production-ready proxy server for intercepting, logging, analyzing, and replay
 - **Dashboard**: React UI for browsing requests, viewing statistics, and exporting data
 - **SQLite Database**: Production-ready persistent storage with migrations
 
+## Deploy
+
+[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/YOUR_USERNAME/proxy/tree/main)
+
+> Replace `YOUR_USERNAME` with your GitHub username after forking. See [DEPLOY.md](DEPLOY.md) for more options.
+
 ## Quick Start
 
 ### Using Docker (Recommended)

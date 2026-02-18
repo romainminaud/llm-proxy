@@ -1,0 +1,25 @@
+name: llm-proxy
+services:
+  - name: llm-proxy
+    dockerfile_path: Dockerfile
+    source_dir: /
+    http_port: 8090
+    instance_size_slug: basic-xs
+    instance_count: 1
+    health_check:
+      http_path: /health
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUST_PROXY
+        value: "true"
+      - key: CORS_ORIGIN
+        value: ${APP_URL}
+    routes:
+      - path: /
+    volumes:
+      - name: data
+        mount_path: /app/server/data
+        size: 10Gi
