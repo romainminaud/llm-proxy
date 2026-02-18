@@ -252,7 +252,7 @@ kubectl apply -f k8s/
 
 #### One-Click Deploy to App Platform
 
-[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/YOUR_USERNAME/proxy/tree/main)
+[![Deploy to DigitalOcean](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/romainminaud/llm-proxy/tree/main)
 
 This uses the `.do/app.yaml` spec in the repo. It provisions the app with a persistent volume for the SQLite database automatically.
 

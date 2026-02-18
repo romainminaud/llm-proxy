@@ -1,8 +1,11 @@
 name: llm-proxy
 services:
   - name: llm-proxy
+    github:
+      repo: romainminaud/llm-proxy
+      branch: main
+      deploy_on_push: true
     dockerfile_path: Dockerfile
-    source_dir: /
     http_port: 8090
     instance_size_slug: basic-xs
     instance_count: 1
@@ -19,7 +22,6 @@ services:
         value: ${APP_URL}
     routes:
       - path: /
-    volumes:
+    storage:
       - name: data
         mount_path: /app/server/data
-        size: 10Gi
