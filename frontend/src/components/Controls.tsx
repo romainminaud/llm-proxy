@@ -6,6 +6,7 @@ type ControlsProps = {
   onModelFilterChange: (value: string) => void
   onRefresh: () => void
   onClearAll: () => void
+  onSettings: () => void
   autoRefreshEnabled: boolean
   autoRefreshMs: number
   onAutoRefreshChange: (enabled: boolean) => void
@@ -22,6 +23,7 @@ function Controls({
   onModelFilterChange,
   onRefresh,
   onClearAll,
+  onSettings,
   autoRefreshEnabled,
   autoRefreshMs,
   onAutoRefreshChange,
@@ -81,6 +83,7 @@ function Controls({
         Auto refresh
         <span className="control-hint">{refreshSeconds}s</span>
       </label>
+      <button className="secondary" onClick={onSettings}>Settings</button>
     </div>
   )
 }

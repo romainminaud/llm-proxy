@@ -1,6 +1,9 @@
 node_modules/
 **/data/
 .env
+.env.local
 *.log
 dist/
+server/dist/
 .DS_Store
+*.tsbuildinfo

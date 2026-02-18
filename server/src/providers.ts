@@ -77,7 +77,29 @@ const anthropic: ProviderConfig = {
   replayApiKeyPlaceholder: 'sk-ant-...',
 };
 
-export const providers: Record<string, ProviderConfig> = { openai, anthropic };
+const gemini: ProviderConfig = {
+  name: 'gemini',
+  baseUrl: config.geminiBaseUrl,
+  buildHeaders: (apiKey) => ({
+    'Content-Type': 'application/json',
+    'x-goog-api-key': apiKey,
+  }),
+  extractApiKey: (req) => req.headers['x-goog-api-key'] as string | undefined,
+  extractTokenUsage: (usage) => ({
+    inputTokens: usage?.promptTokenCount || 0,
+    outputTokens: usage?.candidatesTokenCount || 0,
+    cacheReadTokens: usage?.cachedContentTokenCount || 0,
+    cacheWriteTokens: 0,
+  }),
+  parseErrorMessage: (data: unknown) =>
+    (data as { error?: { message?: string } })?.error?.message || 'Gemini API error',
+  routePrefix: '/gemini',
+  stripPrefix: '\\/gemini',
+  replayApiKeyHeader: 'x-goog-api-key',
+  replayApiKeyPlaceholder: 'AIza...',
+};
+
+export const providers: Record<string, ProviderConfig> = { openai, anthropic, gemini };
 
 export function getProvider(name: string): ProviderConfig {
   const provider = providers[name];

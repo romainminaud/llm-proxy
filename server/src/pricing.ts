@@ -66,6 +66,16 @@ export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
   'text-embedding-3-large': { input: 0.13, output: 0 },
   'text-embedding-ada-002': { input: 0.10, output: 0 },
 
+  // Gemini models
+  'gemini-3-pro-preview': { input: 2.00, cached: 0.50, output: 12.00 },
+  'gemini-3-flash-preview': { input: 0.50, cached: 0.125, output: 3.00 },
+  'gemini-2.5-pro': { input: 1.25, cached: 0.3125, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.15, cached: 0.0375, output: 0.60 },
+  'gemini-2.0-flash': { input: 0.10, cached: 0.025, output: 0.40 },
+  'gemini-2.0-flash-lite': { input: 0.075, cached: 0.01875, output: 0.30 },
+  'gemini-1.5-pro': { input: 1.25, cached: 0.3125, output: 5.00 },
+  'gemini-1.5-flash': { input: 0.075, cached: 0.01875, output: 0.30 },
+
   // Anthropic Claude 4 models (base names for date-suffix fallback)
   'claude-opus-4-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
   'claude-sonnet-4-5': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
@@ -107,6 +117,42 @@ export function loadPricingFromConfig(pricing: Record<string, PricingEntry>): vo
  */
 export function resetPricingToDefaults(): void {
   MODEL_PRICING = { ...DEFAULT_MODEL_PRICING };
+}
+
+/**
+ * Get available models grouped by provider, derived from pricing data
+ * Filters out dated versions and embeddings, keeping only base model names
+ */
+export function getAvailableModelsByProvider(): Record<string, string[]> {
+  const openaiModels: string[] = [];
+  const anthropicModels: string[] = [];
+  const geminiModels: string[] = [];
+
+  for (const model of Object.keys(MODEL_PRICING)) {
+    // Skip dated versions (keep only base model names)
+    if (/-\d{4}-\d{2}-\d{2}$/.test(model) || /-\d{8}$/.test(model)) {
+      continue;
+    }
+    // Skip embeddings
+    if (model.includes('embedding')) {
+      continue;
+    }
+
+    if (model.startsWith('claude-')) {
+      anthropicModels.push(model);
+    } else if (model.startsWith('gemini-')) {
+      geminiModels.push(model);
+    } else {
+      // OpenAI models (gpt-*, o1*, o3*, etc.)
+      openaiModels.push(model);
+    }
+  }
+
+  return {
+    openai: openaiModels,
+    anthropic: anthropicModels,
+    gemini: geminiModels,
+  };
 }
 
 /**

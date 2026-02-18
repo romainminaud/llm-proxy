@@ -1,0 +1,32 @@
+{$DOMAIN:localhost} {
+	# API routes - proxy to backend
+	handle /v1/* {
+		reverse_proxy llm-proxy:8090
+	}
+	handle /anthropic/* {
+		reverse_proxy llm-proxy:8090
+	}
+	handle /gemini/* {
+		reverse_proxy llm-proxy:8090
+	}
+	handle /api/* {
+		reverse_proxy llm-proxy:8090
+	}
+	handle /health {
+		reverse_proxy llm-proxy:8090
+	}
+	handle /ready {
+		reverse_proxy llm-proxy:8090
+	}
+
+	# Frontend - everything else
+	handle {
+		reverse_proxy llm-proxy:3000
+	}
+
+	# Logging
+	log {
+		output stdout
+		format console
+	}
+}

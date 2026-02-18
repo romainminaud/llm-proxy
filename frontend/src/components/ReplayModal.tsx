@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { formatDiff, formatPercent, getDiffClass } from '../utils/diffUtils'
+import { getApiKey, updateApiKey } from '../utils/apiKeys'
 import type { ProviderInfo, ReplayComparisonSummary, RequestRecord } from '../types'
 
 type ReplayModalProps = {
@@ -15,13 +16,22 @@ const DEFAULT_PROVIDER_INFO: ProviderInfo = {
   replayApiKeyPlaceholder: 'sk-...',
 }
 
+function extractModel(value: unknown): string {
+  if (!value || typeof value !== 'object') return ''
+  const model = (value as { model?: unknown }).model
+  return typeof model === 'string' ? model : ''
+}
+
 function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps) {
+  const provider = request.provider || 'openai'
   const [requestBody, setRequestBody] = useState(() => JSON.stringify(request.request_body, null, 2))
-  const [apiKey, setApiKey] = useState('')
+  const [apiKey, setApiKey] = useState(() => getApiKey(provider) || '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [comparison, setComparison] = useState<ReplayComparisonSummary | null>(null)
   const [providerInfo, setProviderInfo] = useState<ProviderInfo>(DEFAULT_PROVIDER_INFO)
+  const [modelOverride, setModelOverride] = useState(() => extractModel(request.request_body) || request.model || '')
+  const [modelOptions, setModelOptions] = useState<string[]>([])
 
   useEffect(() => {
     const fetchProviders = async () => {
@@ -41,6 +51,26 @@ function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps)
     fetchProviders()
   }, [apiBase, request.provider])
 
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/stats`)
+        if (!res.ok) return
+        const data = await res.json() as { byModel?: { model?: string }[] }
+        const models = (data.byModel || [])
+          .map(entry => entry.model)
+          .filter((model): model is string => typeof model === 'string' && model.length > 0)
+        const unique = Array.from(new Set(models))
+        if (unique.length) {
+          setModelOptions(unique.sort())
+        }
+      } catch {
+        // ignore stats fetch errors
+      }
+    }
+    fetchModels()
+  }, [apiBase])
+
   const handleReplay = async () => {
     if (!apiKey) {
       setError('API key is required')
@@ -53,6 +83,16 @@ function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps)
     } catch {
       setError('Invalid JSON in request body')
       return
+    }
+
+    if (modelOverride) {
+      if (!parsedBody || typeof parsedBody !== 'object') {
+        setError('Request body must be a JSON object to set model override')
+        return
+      }
+      if ((parsedBody as { model?: string }).model !== modelOverride) {
+        (parsedBody as { model?: string }).model = modelOverride
+      }
     }
 
     setLoading(true)
@@ -98,9 +138,31 @@ function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps)
               <input
                 type="password"
                 value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
+                onChange={e => {
+                  setApiKey(e.target.value)
+                  updateApiKey(provider, e.target.value)
+                }}
                 placeholder={providerInfo.replayApiKeyPlaceholder}
               />
+              <span className="form-hint">Key is saved locally in your browser</span>
+            </div>
+
+            <div className="form-group">
+              <label>Model override (optional):</label>
+              <input
+                type="text"
+                list="replay-model-options"
+                value={modelOverride}
+                onChange={e => setModelOverride(e.target.value)}
+                placeholder={request.model || ''}
+              />
+              {modelOptions.length > 0 && (
+                <datalist id="replay-model-options">
+                  {modelOptions.map(model => (
+                    <option key={model} value={model} />
+                  ))}
+                </datalist>
+              )}
             </div>
 
             <div className="form-group">

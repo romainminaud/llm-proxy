@@ -1,8 +1,46 @@
-node_modules
-*/node_modules
-.git
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# Data directory (mounted as volume)
+data/
+**/data/
+
+# Development files
+.git/
 .gitignore
 *.md
-.env*
-server/data
-frontend/dist
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+**/test/
+**/__tests__/
+coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Config files (use env vars in production)
+llm-proxy.config.json
+.llm-proxy.json
+
+# TypeScript cache
+*.tsbuildinfo

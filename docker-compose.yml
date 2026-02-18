@@ -1,12 +1,45 @@
 services:
   llm-proxy:
-    build: .
-    ports:
-      - "8090:8090"  # Proxy server
-      - "3000:3000"  # Frontend dashboard
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "8090"
+      - "3000"
     volumes:
-      - ./data:/app/server/data/requests
+      - llm-proxy-data:/app/server/data
     environment:
       - PORT=8090
       - NODE_ENV=production
+      - LOG_LEVEL=info
+      - TRUST_PROXY=true
+      - CORS_ORIGIN=${DOMAIN:-localhost}
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=1000
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    depends_on:
+      - llm-proxy
+    restart: unless-stopped
+
+volumes:
+  llm-proxy-data:
+  caddy-data:
+  caddy-config:

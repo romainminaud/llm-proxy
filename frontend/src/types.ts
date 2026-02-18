@@ -91,3 +91,78 @@ export type ReplayComparisonSummary = {
     durationMs: number
   }
 }
+
+// Structured output response format
+export type ResponseFormat = {
+  type: 'json_schema'
+  json_schema: {
+    name: string
+    schema: Record<string, unknown>
+    strict?: boolean
+  }
+}
+
+// Gemini thinking budget levels
+export type GeminiThinkingLevel = 'none' | 'low' | 'medium' | 'high'
+
+// Per-target settings for comparison
+export type TargetSettings = {
+  systemPromptOverride?: string   // Overrides global systemPrompt if set
+  temperature?: number            // 0.0 to 2.0
+  responseFormat?: ResponseFormat // Structured output JSON schema
+  thinkingLevel?: GeminiThinkingLevel // Gemini thinking budget (none=0, low=1024, medium=8192, high=24576)
+}
+
+// Multi-model comparison types
+export type CompareTarget = {
+  provider: string
+  model: string
+  settings?: TargetSettings       // Optional per-target overrides
+}
+
+export type CompareResult = {
+  target: CompareTarget
+  success: boolean
+  error?: string
+  model?: string
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  inputCost?: number
+  cachedCost?: number
+  cacheWriteCost?: number
+  outputCost?: number
+  totalCost?: number
+  durationMs?: number
+  response?: unknown
+}
+
+export type CompareResponse = {
+  results: CompareResult[]
+}
+
+// Message types for the compare UI
+export type CompareMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export type CompareRequest = {
+  systemPrompt: string
+  messages: CompareMessage[]
+  targets: CompareTarget[]
+}
+
+// Saved comparison type
+export type SavedComparison = {
+  id: string
+  name: string
+  systemPrompt: string
+  messages: CompareMessage[]
+  targets: CompareTarget[]
+  maxTokens: number
+  createdAt: number
+  updatedAt: number
+  lastResults?: CompareResult[]
+}

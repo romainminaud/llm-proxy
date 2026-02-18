@@ -51,6 +51,7 @@ type RequestsTableProps = {
   requests: RequestRecord[]
   onSelect: (request: RequestRecord) => void
   onReplay: (request: RequestRecord) => void
+  onCompare: (request: RequestRecord) => void
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
   onToggleSelectAll: () => void
@@ -65,6 +66,7 @@ function RequestsTable({
   requests,
   onSelect,
   onReplay,
+  onCompare,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
@@ -176,6 +178,7 @@ function RequestsTable({
               <td>
                 <button onClick={() => onSelect(request)}>View</button>
                 <button onClick={() => onReplay(request)}>Replay</button>
+                <button onClick={() => onCompare(request)}>Compare</button>
               </td>
             </tr>
               )
