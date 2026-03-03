@@ -39,9 +39,13 @@ export default function ModelSettingsModal({ target, index, globalSystemPrompt, 
   const [thinkingLevel, setThinkingLevel] = useState<GeminiThinkingLevel | ''>(
     target.settings?.thinkingLevel || ''
   )
+  const [anthropicThinkingBudget, setAnthropicThinkingBudget] = useState<string>(
+    target.settings?.anthropicThinkingBudget !== undefined ? String(target.settings.anthropicThinkingBudget) : ''
+  )
 
-  // Check if the target is a Gemini model
+  // Check if the target is a Gemini or Anthropic model
   const isGeminiModel = target.provider === 'gemini'
+  const isAnthropicModel = target.provider === 'anthropic'
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -98,6 +102,9 @@ export default function ModelSettingsModal({ target, index, globalSystemPrompt, 
     if (thinkingLevel !== '') {
       settings.thinkingLevel = thinkingLevel
     }
+    if (isAnthropicModel && anthropicThinkingBudget !== '') {
+      settings.anthropicThinkingBudget = parseInt(anthropicThinkingBudget, 10)
+    }
 
     onSave(Object.keys(settings).length > 0 ? settings : undefined)
     onClose()
@@ -112,6 +119,7 @@ export default function ModelSettingsModal({ target, index, globalSystemPrompt, 
     setStrictMode(true)
     setSchemaError(null)
     setThinkingLevel('')
+    setAnthropicThinkingBudget('')
   }
 
   const handleGenerateSchema = async () => {
@@ -171,7 +179,7 @@ export default function ModelSettingsModal({ target, index, globalSystemPrompt, 
     }
   }
 
-  const hasSettings = temperature !== '' || systemPromptOverride.trim() !== '' || useStructuredOutput || thinkingLevel !== ''
+  const hasSettings = temperature !== '' || systemPromptOverride.trim() !== '' || useStructuredOutput || thinkingLevel !== '' || anthropicThinkingBudget !== ''
   const effectiveSystemPrompt = systemPromptOverride.trim() || globalSystemPrompt
 
   return (
@@ -210,6 +218,20 @@ export default function ModelSettingsModal({ target, index, globalSystemPrompt, 
                 <option value="high">High (24,576 tokens)</option>
               </select>
               <span className="settings-help">Budget for Gemini's extended thinking. Only works with thinking-capable models (e.g., gemini-2.5-flash-preview-04-17)</span>
+            </div>
+          )}
+
+          {isAnthropicModel && (
+            <div className="model-settings-row">
+              <label>Thinking Budget (tokens)</label>
+              <input
+                type="number"
+                min="0"
+                value={anthropicThinkingBudget}
+                onChange={e => setAnthropicThinkingBudget(e.target.value)}
+                placeholder="Leave blank to disable thinking"
+              />
+              <span className="settings-help">Anthropic extended thinking budget. Requires a thinking-capable model (e.g., claude-sonnet-4-6). Temperature is forced to 1 when enabled.</span>
             </div>
           )}
 

@@ -32,6 +32,32 @@ function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps)
   const [providerInfo, setProviderInfo] = useState<ProviderInfo>(DEFAULT_PROVIDER_INFO)
   const [modelOverride, setModelOverride] = useState(() => extractModel(request.request_body) || request.model || '')
   const [modelOptions, setModelOptions] = useState<string[]>([])
+  const [thinkingBudget, setThinkingBudget] = useState<string>('')
+  const isAnthropic = provider === 'anthropic'
+
+  // Keep request body textarea in sync with override fields
+  useEffect(() => {
+    try {
+      const body = JSON.parse(JSON.stringify(request.request_body)) as Record<string, unknown>
+      if (modelOverride && body.model !== modelOverride) {
+        body.model = modelOverride
+      }
+      if (isAnthropic && thinkingBudget !== '') {
+        const budget = parseInt(thinkingBudget, 10)
+        if (!isNaN(budget) && budget >= 0) {
+          if (budget === 0) {
+            delete body.thinking
+          } else {
+            body.thinking = { type: 'enabled', budget_tokens: budget }
+            body.temperature = 1
+          }
+        }
+      }
+      setRequestBody(JSON.stringify(body, null, 2))
+    } catch {
+      // leave textarea as-is if request_body isn't parseable
+    }
+  }, [modelOverride, thinkingBudget])
 
   useEffect(() => {
     const fetchProviders = async () => {
@@ -83,16 +109,6 @@ function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps)
     } catch {
       setError('Invalid JSON in request body')
       return
-    }
-
-    if (modelOverride) {
-      if (!parsedBody || typeof parsedBody !== 'object') {
-        setError('Request body must be a JSON object to set model override')
-        return
-      }
-      if ((parsedBody as { model?: string }).model !== modelOverride) {
-        (parsedBody as { model?: string }).model = modelOverride
-      }
     }
 
     setLoading(true)
@@ -164,6 +180,20 @@ function ReplayModal({ request, apiBase, onClose, onSuccess }: ReplayModalProps)
                 </datalist>
               )}
             </div>
+
+            {isAnthropic && (
+              <div className="form-group">
+                <label>Thinking budget (tokens, optional):</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={thinkingBudget}
+                  onChange={e => setThinkingBudget(e.target.value)}
+                  placeholder="e.g. 10000 — leave blank to keep original"
+                />
+                <span className="form-hint">Set to 0 to disable thinking. When enabled, temperature is forced to 1.</span>
+              </div>
+            )}
 
             <div className="form-group">
               <label>Request Body (editable):</label>

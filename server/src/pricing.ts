@@ -77,6 +77,8 @@ export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
   'gemini-1.5-flash': { input: 0.075, cached: 0.01875, output: 0.30 },
 
   // Anthropic Claude 4 models (base names for date-suffix fallback)
+  'claude-opus-4-6': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
+  'claude-sonnet-4-6': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
   'claude-opus-4-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
   'claude-sonnet-4-5': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
   'claude-sonnet-4': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },

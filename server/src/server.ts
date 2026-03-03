@@ -1,4 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { closeDatabase } from './database.js';
@@ -104,6 +107,16 @@ app.use(dashboardRouter);
 app.use(replayRouter);
 app.use(compareRouter);
 app.use(proxyRouter);
+
+// Serve frontend static files if built (single-port mode for App Platform / production)
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const frontendDist = join(__dirname, '../../frontend/dist');
+if (existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(join(frontendDist, 'index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

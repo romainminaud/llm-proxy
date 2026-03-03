@@ -90,6 +90,7 @@ export type TargetSettings = {
   temperature?: number            // 0.0 to 2.0
   responseFormat?: ResponseFormat // Structured output JSON schema
   thinkingLevel?: GeminiThinkingLevel // Gemini thinking budget (none=0, low=1024, medium=8192, high=24576)
+  anthropicThinkingBudget?: number   // Anthropic extended thinking budget_tokens (0 = disabled)
 }
 
 // Multi-model comparison types

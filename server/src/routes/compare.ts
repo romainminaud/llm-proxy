@@ -109,7 +109,7 @@ function toOpenAIFormat(systemPrompt: string | undefined, messages: CompareMessa
 }
 
 // Convert messages to Anthropic format
-function toAnthropicFormat(systemPrompt: string | undefined, messages: CompareMessage[], maxTokens?: number, temperature?: number, responseFormat?: ResponseFormat) {
+function toAnthropicFormat(systemPrompt: string | undefined, messages: CompareMessage[], maxTokens?: number, temperature?: number, responseFormat?: ResponseFormat, thinkingBudget?: number) {
   const formattedMessages: { role: string; content: string }[] = [];
 
   for (const msg of messages) {
@@ -118,11 +118,14 @@ function toAnthropicFormat(systemPrompt: string | undefined, messages: CompareMe
     }
   }
 
+  const thinkingEnabled = thinkingBudget !== undefined && thinkingBudget > 0;
+
   const result: {
     system?: string
     messages: typeof formattedMessages
     max_tokens: number
     temperature?: number
+    thinking?: { type: 'enabled'; budget_tokens: number }
     tools?: Array<{ name: string; description: string; input_schema: Record<string, unknown> }>
     tool_choice?: { type: 'tool'; name: string }
   } = {
@@ -131,7 +134,11 @@ function toAnthropicFormat(systemPrompt: string | undefined, messages: CompareMe
     max_tokens: maxTokens || 4096,
   };
 
-  if (temperature !== undefined) {
+  if (thinkingEnabled) {
+    result.thinking = { type: 'enabled', budget_tokens: thinkingBudget! };
+    // Anthropic requires temperature=1 when extended thinking is enabled
+    result.temperature = 1;
+  } else if (temperature !== undefined) {
     result.temperature = temperature;
   }
 
@@ -265,13 +272,14 @@ function formatRequestBody(
   maxTokens?: number,
   temperature?: number,
   responseFormat?: ResponseFormat,
-  thinkingLevel?: GeminiThinkingLevel
+  thinkingLevel?: GeminiThinkingLevel,
+  anthropicThinkingBudget?: number
 ): unknown {
   switch (provider) {
     case 'openai':
       return { model, ...toOpenAIFormat(systemPrompt, messages, model, maxTokens, temperature, responseFormat) };
     case 'anthropic':
-      return { model, ...toAnthropicFormat(systemPrompt, messages, maxTokens, temperature, responseFormat) };
+      return { model, ...toAnthropicFormat(systemPrompt, messages, maxTokens, temperature, responseFormat, anthropicThinkingBudget) };
     case 'gemini':
       return toGeminiFormat(systemPrompt, messages, temperature, responseFormat, thinkingLevel);
     default:
@@ -301,6 +309,9 @@ async function executeComparison(
   // Get thinking level for Gemini thinking models
   const thinkingLevel = settings?.thinkingLevel;
 
+  // Get Anthropic extended thinking budget
+  const anthropicThinkingBudget = settings?.anthropicThinkingBudget;
+
   let providerConfig: ProviderConfig;
   try {
     providerConfig = getProvider(providerName);
@@ -321,7 +332,7 @@ async function executeComparison(
     };
   }
 
-  const requestBody = formatRequestBody(providerName, model, effectiveSystemPrompt, messages, maxTokens, temperature, responseFormat, thinkingLevel);
+  const requestBody = formatRequestBody(providerName, model, effectiveSystemPrompt, messages, maxTokens, temperature, responseFormat, thinkingLevel, anthropicThinkingBudget);
   let path = getApiPath(providerName);
 
   // For Gemini, replace {model} placeholder

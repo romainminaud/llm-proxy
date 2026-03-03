@@ -219,7 +219,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       'output_cost',
       'total_cost',
       'duration_ms',
-      'replay_of'
+      'replay_of',
+      'tools_defined',
+      'tool_calls_made',
+      'tool_names_called'
     ]
     const rows = selectedRequests.map(request => {
       const timestamp = new Date(request.timestamp).toISOString()
@@ -228,6 +231,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const cachedCost = request.cached_cost || 0
       const outputCost = request.output_cost || 0
       const totalCost = request.total_cost ?? (inputCost + cachedCost + outputCost)
+
+      const body = request.request_body as Record<string, unknown> | null
+      const toolsDefined = Array.isArray(body?.tools) ? (body.tools as unknown[]).length : ''
+
+      const resp = request.response_body as Record<string, unknown> | null
+      // OpenAI: choices[0].message.tool_calls
+      const openaiToolCalls = (resp?.choices as Array<Record<string, unknown>> | undefined)?.[0]
+        ?.message as Record<string, unknown> | undefined
+      const openaiCalls = Array.isArray(openaiToolCalls?.tool_calls)
+        ? (openaiToolCalls!.tool_calls as Array<Record<string, unknown>>)
+        : null
+      // Anthropic: content[].type === 'tool_use'
+      const anthropicCalls = Array.isArray(resp?.content)
+        ? (resp!.content as Array<Record<string, unknown>>).filter(c => c.type === 'tool_use')
+        : null
+
+      const toolCallItems = openaiCalls ?? anthropicCalls ?? []
+      const toolCallsMade = toolCallItems.length > 0 ? toolCallItems.length : ''
+      const toolNamesCalled = toolCallItems.length > 0
+        ? toolCallItems.map(c => (c.function as Record<string, unknown>)?.name ?? c.name ?? '').join(';')
+        : ''
+
       return [
         timestamp,
         request.id,
@@ -241,7 +266,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         outputCost,
         totalCost,
         request.duration_ms ?? '',
-        request.replay_of || ''
+        request.replay_of || '',
+        toolsDefined,
+        toolCallsMade,
+        toolNamesCalled
       ]
     })
 
