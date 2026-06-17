@@ -7,11 +7,12 @@ import { getTokenSplit } from '../tokens.js';
 
 const router = Router();
 
-function createProxyHandler(provider: ProviderConfig) {
+function createProxyHandler(provider: ProviderConfig, pathPrefix = '') {
   return async (req: Request, res: Response) => {
     const requestId = uuidv4();
     const startTime = Date.now();
-    const path = provider.stripPrefix ? req.path.replace(new RegExp(`^${provider.stripPrefix}`), '') : req.path;
+    const strippedPath = provider.stripPrefix ? req.path.replace(new RegExp(`^${provider.stripPrefix}`), '') : req.path;
+    const path = `${pathPrefix}${strippedPath}`;
     const method = req.method;
 
     const apiKey = provider.extractApiKey(req);
@@ -119,5 +120,10 @@ function createProxyHandler(provider: ProviderConfig) {
 for (const provider of Object.values(providers)) {
   router.all(`${provider.routePrefix}/*`, createProxyHandler(provider));
 }
+
+// OpenAI Responses API: when OPENAI_BASE_URL is set to http://proxy/v1, the SDK
+// sends requests to /responses (relative to the /v1 base). Forward with /v1 prefix.
+router.all('/responses', createProxyHandler(providers['openai'], '/v1'));
+router.all('/responses/*', createProxyHandler(providers['openai'], '/v1'));
 
 export default router;

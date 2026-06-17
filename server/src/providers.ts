@@ -43,7 +43,9 @@ const openai: ProviderConfig = {
   extractTokenUsage: (usage) => ({
     inputTokens: usage?.prompt_tokens || usage?.input_tokens || 0,
     outputTokens: usage?.completion_tokens || usage?.output_tokens || 0,
-    cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens || 0,
+    // Chat Completions API uses prompt_tokens_details.cached_tokens
+    // Responses API uses input_tokens_details.cached_tokens
+    cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens || usage?.input_tokens_details?.cached_tokens || 0,
     cacheWriteTokens: 0,
   }),
   parseErrorMessage: (data: unknown) =>

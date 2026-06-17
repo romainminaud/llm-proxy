@@ -91,6 +91,7 @@ export type TargetSettings = {
   responseFormat?: ResponseFormat // Structured output JSON schema
   thinkingLevel?: GeminiThinkingLevel // Gemini thinking budget (none=0, low=1024, medium=8192, high=24576)
   anthropicThinkingBudget?: number   // Anthropic extended thinking budget_tokens (0 = disabled)
+  useResponsesApi?: boolean          // OpenAI: use Responses API (/v1/responses) instead of Chat Completions
 }
 
 // Multi-model comparison types

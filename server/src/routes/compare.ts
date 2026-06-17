@@ -249,11 +249,42 @@ function toGeminiFormat(systemPrompt: string | undefined, messages: CompareMessa
   return request;
 }
 
+// Build request body for OpenAI Responses API
+function toOpenAIResponsesFormat(systemPrompt: string | undefined, messages: CompareMessage[], maxTokens?: number, temperature?: number) {
+  // Responses API uses an `input` array of message objects
+  const input: { type: string; role: string; content: string }[] = messages.map(msg => ({
+    type: 'message',
+    role: msg.role,
+    content: msg.content,
+  }));
+
+  const result: {
+    input: typeof input
+    instructions?: string
+    max_output_tokens?: number
+    temperature?: number
+  } = { input };
+
+  if (systemPrompt) {
+    result.instructions = systemPrompt;
+  }
+
+  if (maxTokens) {
+    result.max_output_tokens = maxTokens;
+  }
+
+  if (temperature !== undefined) {
+    result.temperature = temperature;
+  }
+
+  return result;
+}
+
 // Get the API path for a provider
-function getApiPath(provider: string): string {
+function getApiPath(provider: string, useResponsesApi?: boolean): string {
   switch (provider) {
     case 'openai':
-      return '/v1/chat/completions';
+      return useResponsesApi ? '/v1/responses' : '/v1/chat/completions';
     case 'anthropic':
       return '/v1/messages';
     case 'gemini':
@@ -273,8 +304,12 @@ function formatRequestBody(
   temperature?: number,
   responseFormat?: ResponseFormat,
   thinkingLevel?: GeminiThinkingLevel,
-  anthropicThinkingBudget?: number
+  anthropicThinkingBudget?: number,
+  useResponsesApi?: boolean
 ): unknown {
+  if (provider === 'openai' && useResponsesApi) {
+    return { model, ...toOpenAIResponsesFormat(systemPrompt, messages, maxTokens, temperature) };
+  }
   switch (provider) {
     case 'openai':
       return { model, ...toOpenAIFormat(systemPrompt, messages, model, maxTokens, temperature, responseFormat) };
@@ -312,6 +347,9 @@ async function executeComparison(
   // Get Anthropic extended thinking budget
   const anthropicThinkingBudget = settings?.anthropicThinkingBudget;
 
+  // Use OpenAI Responses API instead of Chat Completions
+  const useResponsesApi = settings?.useResponsesApi;
+
   let providerConfig: ProviderConfig;
   try {
     providerConfig = getProvider(providerName);
@@ -332,8 +370,8 @@ async function executeComparison(
     };
   }
 
-  const requestBody = formatRequestBody(providerName, model, effectiveSystemPrompt, messages, maxTokens, temperature, responseFormat, thinkingLevel, anthropicThinkingBudget);
-  let path = getApiPath(providerName);
+  const requestBody = formatRequestBody(providerName, model, effectiveSystemPrompt, messages, maxTokens, temperature, responseFormat, thinkingLevel, anthropicThinkingBudget, useResponsesApi);
+  let path = getApiPath(providerName, useResponsesApi);
 
   // For Gemini, replace {model} placeholder
   if (providerName === 'gemini') {
