@@ -25,6 +25,32 @@ export default function Sidebar() {
           <span>Logs</span>
         </NavLink>
         <NavLink
+          to="/sessions"
+          className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+        >
+          <span className="sidebar-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="4" cy="4" r="1.5" />
+              <circle cx="4" cy="12" r="1.5" />
+              <circle cx="12" cy="8" r="1.5" />
+              <path d="M5.5 4.5L10.5 7.2M5.5 11.5L10.5 8.8" />
+            </svg>
+          </span>
+          <span>Sessions</span>
+        </NavLink>
+        <NavLink
+          to="/turns"
+          className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+        >
+          <span className="sidebar-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2.5 5h8.5a2.5 2.5 0 0 1 0 5H5" />
+              <path d="M7 7.5L4.5 10L7 12.5" />
+            </svg>
+          </span>
+          <span>Turns</span>
+        </NavLink>
+        <NavLink
           to="/compare"
           className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
         >

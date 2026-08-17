@@ -17,6 +17,12 @@ export default function LogsPage() {
     selectedRequests,
     modelFilter,
     setModelFilter,
+    providerFilter,
+    setProviderFilter,
+    page,
+    setPage,
+    pageSize,
+    totalCount,
     autoRefreshEnabled,
     setAutoRefreshEnabled,
     priceMultiplier,
@@ -68,6 +74,12 @@ export default function LogsPage() {
         modelFilter={modelFilter}
         stats={stats}
         onModelFilterChange={setModelFilter}
+        providerFilter={providerFilter}
+        onProviderFilterChange={setProviderFilter}
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={setPage}
         onRefresh={loadData}
         onClearAll={clearAll}
         onSettings={() => setShowSettingsModal(true)}

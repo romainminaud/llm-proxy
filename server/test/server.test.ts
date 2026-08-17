@@ -115,7 +115,8 @@ async function request(path: string, options: {
     headers: { 'Content-Type': 'application/json', ...headers },
     body: body ? JSON.stringify(body) : undefined,
   })
-  const data = await res.json()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await res.json() as any
   return { status: res.status, data }
 }
 
@@ -379,7 +380,7 @@ test('Replay: replays an OpenAI request', async () => {
   const originalId = getRequests({})[0].id
   const { status, data } = await request(`/api/replay/${originalId}`, {
     method: 'POST',
-    headers: { Authorization: 'Bearer replay-key' },
+    headers: { 'x-openai-api-key': 'replay-key' },
   })
 
   assert.equal(status, 200)
@@ -445,4 +446,23 @@ test('Replay: returns 400 without API key', async () => {
 test('OPTIONS requests return 200 for CORS preflight', async () => {
   const res = await fetch(`${base}/v1/chat/completions`, { method: 'OPTIONS' })
   assert.equal(res.status, 200)
+})
+
+test('Proxy: vendor-agnostic session/agent headers are stored and not forwarded upstream', async () => {
+  const { status } = await request('/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer test-key',
+      'x-llm-proxy-session-id': 'my-task-42',
+      'x-llm-proxy-agent': 'my-agent/0.9.0',
+    },
+    body: { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] },
+  })
+  assert.equal(status, 200)
+
+  await wait()
+  const saved = getRequests({})[0]
+  assert.equal(saved.session_id, 's:my-task-42')
+  assert.equal(saved.agent_entrypoint, 'my-agent')
+  assert.equal(saved.agent_version, '0.9.0')
 })

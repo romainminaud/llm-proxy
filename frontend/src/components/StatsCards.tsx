@@ -1,4 +1,5 @@
 import type { DisplayStats } from '../types'
+import { formatRatio } from '../utils/toolCalls'
 
 type StatsCardsProps = {
   stats: DisplayStats | null
@@ -35,6 +36,20 @@ function StatsCards({ stats, selectionCount = 0, priceMultiplier = 1 }: StatsCar
           <div className="stat-value">{stats.totalCachedTokens.toLocaleString()}</div>
         </div>
         <div className="stat-card">
+          <div className="stat-label">Cache Write</div>
+          <div className="stat-value">{stats.totalCacheWriteTokens.toLocaleString()}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Cache Hit</div>
+          <div className="stat-value" title="cache reads / (input + cache reads + cache writes)">
+            {formatRatio(stats.cacheHitRatio)}
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Reasoning</div>
+          <div className="stat-value">{stats.totalReasoningTokens.toLocaleString()}</div>
+        </div>
+        <div className="stat-card">
           <div className="stat-label">Output</div>
           <div className="stat-value">{stats.totalOutputTokens.toLocaleString()}</div>
         </div>
@@ -53,6 +68,10 @@ function StatsCards({ stats, selectionCount = 0, priceMultiplier = 1 }: StatsCar
         <div className="stat-card">
           <div className="stat-label">Cached $</div>
           <div className="stat-value cost">${applyMultiplier(stats.totalCachedCost).toFixed(2)}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Cache Write $</div>
+          <div className="stat-value cost">${applyMultiplier(stats.totalCacheWriteCost).toFixed(2)}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Output $</div>

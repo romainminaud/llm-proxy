@@ -1,13 +1,21 @@
 /**
  * Split input tokens into total, non-cached, and cached components.
- * Handles both OpenAI and Anthropic token reporting conventions.
+ *
+ * Providers report cache tokens with two conventions, and the caller knows
+ * which one applies (ProviderConfig.inputTokensIncludeCache):
+ * - OpenAI/Gemini: prompt_tokens/promptTokenCount already INCLUDE cached tokens.
+ * - Anthropic: input_tokens EXCLUDES cache_read_input_tokens and
+ *   cache_creation_input_tokens, so the true context size is the sum of all three.
  */
-export function getTokenSplit(inputTokens: number, cacheReadTokens: number) {
-  // Anthropic reports cache_read_input_tokens separately from input_tokens
-  // so total = input + cache_read. OpenAI includes cached in prompt_tokens.
-  if (cacheReadTokens > inputTokens) {
+export function getTokenSplit(
+  inputTokens: number,
+  cacheReadTokens: number,
+  cacheWriteTokens: number,
+  inputTokensIncludeCache: boolean
+) {
+  if (!inputTokensIncludeCache) {
     return {
-      totalInputTokens: inputTokens + cacheReadTokens,
+      totalInputTokens: inputTokens + cacheReadTokens + cacheWriteTokens,
       nonCachedInputTokens: inputTokens,
       cachedInputTokens: cacheReadTokens,
     };

@@ -31,6 +31,13 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
     if (r.request_body?.messages) {
       return r.request_body.messages as MessageLike[]
     }
+    if (r.request_body?.contents) {
+      return (r.request_body.contents as Array<{ role?: string; parts?: Array<{ text?: string }> }>)
+        .map(item => ({
+          role: item.role || 'user',
+          content: item.parts?.map(p => p.text || '').join('') || '',
+        }))
+    }
     if (r.request_body?.input) {
       const input = r.request_body.input
       if (typeof input === 'string') {
@@ -50,7 +57,41 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
     if (r.response_body?.choices) {
       return r.response_body.choices
         .map((choice: { message?: MessageLike }) => choice.message)
-        .filter((message): message is MessageLike => Boolean(message))
+        .filter((message: MessageLike | undefined): message is MessageLike => Boolean(message))
+    }
+    if (r.response_body?.candidates) {
+      return (r.response_body.candidates as Array<{
+        content?: { parts?: Array<{ text?: string; functionCall?: { name?: string; args?: unknown } }> }
+      }>)
+        .map(candidate => {
+          const parts = candidate.content?.parts || []
+          const text = parts.filter(p => p.text).map(p => p.text!).join('')
+          const fnCall = parts.find(p => p.functionCall)?.functionCall
+          const content = fnCall
+            ? `[Function call: ${fnCall.name}]\n${JSON.stringify(fnCall.args, null, 2)}`
+            : text
+          return { role: 'assistant', content }
+        })
+        .filter(m => Boolean(m.content))
+    }
+    // Anthropic native shape: { content: [{type:'text',text}, {type:'tool_use',...}, ...] }
+    if (Array.isArray(r.response_body?.content)) {
+      const blocks = r.response_body.content as Array<{
+        type?: string
+        text?: string
+        thinking?: string
+        name?: string
+        input?: unknown
+      }>
+      const parts = blocks.map(block => {
+        if (block.type === 'text') return block.text || ''
+        if (block.type === 'thinking') return block.thinking ? `[Thinking]\n${block.thinking}` : ''
+        if (block.type === 'tool_use') {
+          return `[Tool call: ${block.name}]\n${JSON.stringify(block.input, null, 2)}`
+        }
+        return ''
+      }).filter(Boolean)
+      return parts.length ? [{ role: 'assistant', content: parts.join('\n\n') }] : []
     }
     if (r.response_body?.output) {
       return r.response_body.output
@@ -64,7 +105,7 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
           }
           return null
         })
-        .filter((message): message is MessageLike => Boolean(message))
+        .filter((message: MessageLike | null): message is MessageLike => Boolean(message))
     }
     return []
   }
@@ -157,6 +198,19 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
                 ? ` (${r.cached_tokens || r.response_body?.usage?.prompt_tokens_details?.cached_tokens} cached)`
                 : ''}
             </div>
+            {(r.cache_write_tokens ?? 0) > 0 && (
+              <div>
+                <strong>Cache write:</strong> {(r.cache_write_tokens ?? 0).toLocaleString()}
+                {r.cache_write_cost ? ` ($${r.cache_write_cost.toFixed(6)})` : ''}
+              </div>
+            )}
+            {(r.reasoning_tokens ?? 0) > 0 && (
+              <div><strong>Reasoning:</strong> {(r.reasoning_tokens ?? 0).toLocaleString()}</div>
+            )}
+            {r.stop_reason && <div><strong>Stop:</strong> {r.stop_reason}</div>}
+            {typeof r.tools_defined_count === 'number' && (
+              <div><strong>Tools defined:</strong> {r.tools_defined_count}</div>
+            )}
             <div><strong>Cost:</strong> <span className="cost">${(r.total_cost || 0).toFixed(6)}</span></div>
           </div>
         </div>
@@ -169,7 +223,7 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
           {allMessages.map((msg, i) => (
             <div
               key={i}
-              ref={el => messageRefs.current[i] = el}
+              ref={el => { messageRefs.current[i] = el }}
               className={i === currentMsgIndex ? 'message-highlight' : ''}
             >
               <Message message={msg} index={i + 1} />
@@ -213,6 +267,20 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
           </div>
           <div className="meta-item"><span>Time:</span> {new Date(r.timestamp).toLocaleString()}</div>
           <div className="meta-item"><span>Path:</span> {r.path}</div>
+          {r.session_id && (
+            <div className="meta-item meta-item-id">
+              <span>Session:</span>
+              <span className="meta-id" title={r.session_id}>{r.session_id}</span>
+              <button className="copy-btn copy-btn-small" onClick={() => onCopyId?.(r.session_id!)}>
+                {copiedId === r.session_id ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          )}
+          {r.agent_entrypoint && (
+            <div className="meta-item">
+              <span>Agent:</span> {r.agent_entrypoint}{r.agent_version ? ` v${r.agent_version}` : ''}
+            </div>
+          )}
           {r.replay_of && (
             <div className="meta-item"><span>Replay of:</span> {r.replay_of}</div>
           )}

@@ -108,6 +108,31 @@ client = Anthropic(base_url="http://localhost:8090/anthropic")
 http://localhost:8090/gemini/v1beta/models/gemini-pro:generateContent
 ```
 
+### Session Grouping (Agentic Traffic)
+
+Requests are grouped into **sessions** for the Sessions view. The session id is resolved in priority order:
+
+1. **`x-llm-proxy-session-id` header** — vendor-agnostic, works with any provider or agent framework. The proxy consumes it and never forwards it upstream. Optionally add `x-llm-proxy-agent: <name>/<version>` to label the agent.
+2. **Claude Code metadata** — Claude Code's session id is picked up automatically from `metadata.user_id` (Anthropic requests), no configuration needed.
+3. **Conversation-prefix hash** — fallback: requests sharing a system prompt + first user message group under a `h:`-prefixed heuristic session.
+
+```python
+# Any OpenAI-compatible client
+client = OpenAI(
+    base_url="http://localhost:8090/v1",
+    default_headers={
+        "x-llm-proxy-session-id": "task-42",
+        "x-llm-proxy-agent": "my-agent/1.0.0",
+    },
+)
+```
+
+```bash
+# Claude Code (session id is automatic; header only needed for custom labels)
+export ANTHROPIC_BASE_URL=http://localhost:8090/anthropic
+export ANTHROPIC_CUSTOM_HEADERS="x-llm-proxy-agent: nightly-runner/1.0"
+```
+
 ## API Endpoints
 
 ### Proxy Routes
@@ -116,8 +141,10 @@ http://localhost:8090/gemini/v1beta/models/gemini-pro:generateContent
 - `POST /gemini/*` - Google Gemini API proxy
 
 ### Dashboard API
-- `GET /api/requests` - List requests (`?model=`, `?limit=`, `?offset=`)
+- `GET /api/requests` - List requests (`?model=`, `?provider=`, `?session_id=`, `?limit=`, `?offset=`; total in `X-Total-Count`)
 - `GET /api/requests/:id` - Get request details
+- `GET /api/sessions` - Per-session rollups (tokens by class, cache hit ratio, cost, tool calls)
+- `GET /api/sessions/:id` - Session turn timeline (`?insights=1` adds context attribution + cache warnings)
 - `DELETE /api/requests/:id` - Delete a request
 - `DELETE /api/requests` - Clear all requests
 - `GET /api/stats` - Aggregated statistics

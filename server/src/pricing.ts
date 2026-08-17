@@ -66,17 +66,35 @@ export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
   'text-embedding-3-large': { input: 0.13, output: 0 },
   'text-embedding-ada-002': { input: 0.10, output: 0 },
 
-  // Gemini models
-  'gemini-3-pro-preview': { input: 2.00, cached: 0.50, output: 12.00 },
-  'gemini-3-flash-preview': { input: 0.50, cached: 0.125, output: 3.00 },
-  'gemini-2.5-pro': { input: 1.25, cached: 0.3125, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.15, cached: 0.0375, output: 0.60 },
+  // Gemini 3.x models
+  'gemini-3.1-pro-preview': { input: 2.00, cached: 0.20, output: 12.00 },
+  'gemini-3.1-pro-preview-customtools': { input: 2.00, cached: 0.20, output: 12.00 },
+  'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
+  'gemini-3-pro-preview': { input: 2.00, cached: 0.20, output: 12.00 },
+  'gemini-3-flash-preview': { input: 0.50, cached: 0.05, output: 3.00 },
+
+  // Gemini 2.5 models
+  'gemini-2.5-pro': { input: 1.25, cached: 0.125, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.30, cached: 0.03, output: 2.50 },
+  'gemini-2.5-flash-lite': { input: 0.10, cached: 0.01, output: 0.40 },
+  'gemini-2.5-flash-lite-preview-09-2025': { input: 0.10, cached: 0.01, output: 0.40 },
+
+  // Gemini 2.0 models
   'gemini-2.0-flash': { input: 0.10, cached: 0.025, output: 0.40 },
-  'gemini-2.0-flash-lite': { input: 0.075, cached: 0.01875, output: 0.30 },
+  'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
+
+  // Gemini 1.5 models (legacy)
   'gemini-1.5-pro': { input: 1.25, cached: 0.3125, output: 5.00 },
   'gemini-1.5-flash': { input: 0.075, cached: 0.01875, output: 0.30 },
 
+  // Anthropic Claude 5 models
+  'claude-opus-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
+  'claude-sonnet-5': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
+  'claude-fable-5': { input: 10.00, cached: 1.00, cacheWrite: 12.50, output: 50.00 },
+
   // Anthropic Claude 4 models (base names for date-suffix fallback)
+  'claude-opus-4-8': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
+  'claude-opus-4-7': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
   'claude-opus-4-6': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
   'claude-sonnet-4-6': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
   'claude-opus-4-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },

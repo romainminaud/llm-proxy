@@ -26,6 +26,19 @@ export type RequestRecord = {
   total_cost: number | null
   error: string | null
   replay_of: string | null
+  // Agentic metadata (null = provider couldn't say, never coerced to 0)
+  session_id?: string | null          // "s:<id>" explicit, "h:<hash>" heuristic
+  turn_id?: string | null             // verbatim x-llm-proxy-turn-id header
+  agent_entrypoint?: string | null    // e.g. "sdk-cli" (Claude Code)
+  agent_version?: string | null
+  tools_defined_count?: number | null
+  tool_calls_count?: number | null
+  tool_names?: string[] | null        // verbatim wire names
+  reasoning_tokens?: number | null
+  stop_reason?: string | null         // verbatim per provider
+  message_count?: number | null
+  request_bytes?: number | null
+  response_bytes?: number | null
 }
 
 export type SaveRequestInput = {
@@ -53,6 +66,19 @@ export type SaveRequestInput = {
   totalCost: number | null
   error?: string | null
   replayOf?: string | null
+  // Agentic metadata
+  sessionId?: string | null
+  turnId?: string | null
+  agentEntrypoint?: string | null
+  agentVersion?: string | null
+  toolsDefinedCount?: number | null
+  toolCallsCount?: number | null
+  toolNames?: string[] | null
+  reasoningTokens?: number | null
+  stopReason?: string | null
+  messageCount?: number | null
+  requestBytes?: number | null
+  responseBytes?: number | null
 }
 
 export type ModelStats = {
@@ -63,11 +89,92 @@ export type ModelStats = {
   total_cost: number
 }
 
+// Per-session rollup. Token classes follow softr-as-code's TokenTotals
+// vocabulary: input (non-cached), cacheRead, cacheWrite, output, reasoning.
+export type SessionSummary = {
+  session_id: string
+  request_count: number
+  turn_count: number     // distinct turn_ids; 0 when nothing is turn-tagged
+  error_count: number
+  started_at: string
+  ended_at: string
+  wall_ms: number       // ended_at - started_at (includes tool execution + user time)
+  api_ms: number        // sum of per-request durations (time in model)
+  input_tokens: number  // non-cached input
+  cache_read_tokens: number
+  cache_write_tokens: number
+  output_tokens: number
+  reasoning_tokens: number
+  total_cost: number
+  tool_calls: number
+  // cacheRead / (input + cacheRead + cacheWrite); null when no tokens observed
+  cache_hit_ratio: number | null
+  models: string[]
+  agent_entrypoint: string | null
+  agent_version: string | null
+  last_stop_reason: string | null
+}
+
+// One request inside a session timeline — body columns excluded (fetch via /api/requests/:id)
+export type SessionRequest = Omit<RequestRecord, 'request_body' | 'response_body'> & {
+  // Ordinal of the request within the session (1-based); not a turn — see turn_id
+  seq: number
+  // total_input_tokens delta vs the previous request in the session; null for the first
+  context_growth: number | null
+}
+
+// Per-turn rollup inside one session, grouped by the client-supplied
+// x-llm-proxy-turn-id header. Requests without a turn_id are not rolled up.
+export type TurnSummary = {
+  turn_id: string
+  request_count: number
+  error_count: number
+  started_at: string
+  ended_at: string
+  wall_ms: number
+  api_ms: number
+  input_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  output_tokens: number
+  reasoning_tokens: number
+  total_cost: number
+  tool_calls: number
+  last_stop_reason: string | null
+}
+
+// One row in the cross-session turns list (/api/turns)
+export type TurnListItem = TurnSummary & {
+  session_id: string
+  models: string[]
+  agent_entrypoint: string | null
+}
+
+// Drill-down for one turn (/api/sessions/:id/turns/:turnId)
+export type TurnDetail = {
+  turn: TurnListItem
+  requests: SessionRequest[]
+  tool_usage: Record<string, number>
+}
+
+export type SessionDetail = {
+  session: SessionSummary
+  requests: SessionRequest[]
+  turns: TurnSummary[]                // ordered by first request; empty if nothing is turn-tagged
+  tool_usage: Record<string, number>  // tool name -> call count across the session
+  by_model: ModelStats[]
+}
+
 export type Stats = {
   totalRequests: number
   totalCost: number
   totalInputTokens: number
   totalOutputTokens: number
+  totalCacheReadTokens: number
+  totalCacheWriteTokens: number
+  totalReasoningTokens: number
+  cacheHitRatio: number | null
+  sessionCount: number
   byModel: ModelStats[]
 }
 

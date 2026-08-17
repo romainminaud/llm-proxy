@@ -14,6 +14,11 @@ export type Stats = {
   totalCost: number
   totalInputTokens: number
   totalOutputTokens: number
+  totalCacheReadTokens?: number
+  totalCacheWriteTokens?: number
+  totalReasoningTokens?: number
+  cacheHitRatio?: number | null
+  sessionCount?: number
   byModel: ModelStat[]
 }
 
@@ -22,11 +27,16 @@ export type DisplayStats = {
   totalCost: number
   totalInputTokens: number
   totalCachedTokens: number
+  totalCacheWriteTokens: number
+  totalReasoningTokens: number
   totalOutputTokens: number
   totalDurationMs: number
   totalInputCost: number
   totalCachedCost: number
+  totalCacheWriteCost: number
   totalOutputCost: number
+  // cacheRead / (nonCached + cacheRead + cacheWrite); null when no tokens observed
+  cacheHitRatio: number | null
 }
 
 export type RequestRecord = {
@@ -36,10 +46,14 @@ export type RequestRecord = {
   path?: string
   provider?: string
   input_tokens?: number
+  total_input_tokens?: number | null
+  non_cached_input_tokens?: number | null
   output_tokens?: number
   cached_tokens?: number
+  cache_write_tokens?: number | null
   input_cost?: number
   cached_cost?: number
+  cache_write_cost?: number | null
   output_cost?: number
   total_cost?: number
   duration_ms?: number
@@ -47,6 +61,89 @@ export type RequestRecord = {
   replay_of?: string
   request_body?: any
   response_body?: any
+  // Agentic metadata (null = provider couldn't say)
+  session_id?: string | null
+  turn_id?: string | null
+  agent_entrypoint?: string | null
+  agent_version?: string | null
+  tools_defined_count?: number | null
+  tool_calls_count?: number | null
+  tool_names?: string[] | null
+  reasoning_tokens?: number | null
+  stop_reason?: string | null
+  message_count?: number | null
+  request_bytes?: number | null
+  response_bytes?: number | null
+}
+
+// Per-session rollup returned by /api/sessions
+export type SessionSummary = {
+  session_id: string
+  request_count: number
+  turn_count: number
+  error_count: number
+  started_at: string
+  ended_at: string
+  wall_ms: number
+  api_ms: number
+  input_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  output_tokens: number
+  reasoning_tokens: number
+  total_cost: number
+  tool_calls: number
+  cache_hit_ratio: number | null
+  models: string[]
+  agent_entrypoint: string | null
+  agent_version: string | null
+  last_stop_reason: string | null
+}
+
+export type SessionRequest = Omit<RequestRecord, 'request_body' | 'response_body'> & {
+  seq: number
+  context_growth: number | null
+}
+
+// Per-turn rollup within a session (grouped by the x-llm-proxy-turn-id header)
+export type TurnSummary = {
+  turn_id: string
+  request_count: number
+  error_count: number
+  started_at: string
+  ended_at: string
+  wall_ms: number
+  api_ms: number
+  input_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  output_tokens: number
+  reasoning_tokens: number
+  total_cost: number
+  tool_calls: number
+  last_stop_reason: string | null
+}
+
+// One row in the cross-session turns list (/api/turns)
+export type TurnListItem = TurnSummary & {
+  session_id: string
+  models: string[]
+  agent_entrypoint: string | null
+}
+
+// Drill-down for one turn (/api/sessions/:id/turns/:turnId)
+export type TurnDetail = {
+  turn: TurnListItem
+  requests: SessionRequest[]
+  tool_usage: Record<string, number>
+}
+
+export type SessionDetail = {
+  session: SessionSummary
+  requests: SessionRequest[]
+  turns: TurnSummary[]
+  tool_usage: Record<string, number>
+  by_model: Array<{ model: string; count: number; input_tokens: number; output_tokens: number; total_cost: number }>
 }
 
 export type MessageLike = {

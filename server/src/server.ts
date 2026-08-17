@@ -59,7 +59,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Clean up rate limit map periodically
+// Clean up rate limit map periodically. unref() so this timer never keeps
+// the process alive on its own (e.g. after the test runner closes servers).
 setInterval(() => {
   const now = Date.now();
   for (const [ip, record] of rateLimitMap) {
@@ -67,7 +68,7 @@ setInterval(() => {
       rateLimitMap.delete(ip);
     }
   }
-}, 60000);
+}, 60000).unref();
 
 // Parse JSON bodies with large limit for LLM requests
 app.use(express.json({ limit: '50mb' }));
@@ -77,6 +78,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   res.header('Access-Control-Allow-Origin', config.corsOrigin);
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Expose-Headers', 'X-Total-Count');
   if (_req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }

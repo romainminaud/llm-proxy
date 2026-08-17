@@ -377,6 +377,26 @@ select {
   background: var(--accent-muted);
 }
 
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 20px 0 8px;
+}
+
+/* Turn group header inside a session timeline */
+.requests-table tr.turn-header-row td {
+  background: var(--bg-elevated);
+  border-top: 2px solid var(--border-strong, var(--border, #444));
+  font-size: 0.85em;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.turn-header-row .turn-id {
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+}
+
 .requests-table tr.selected-row:hover {
   background: rgba(59, 130, 246, 0.18);
 }
@@ -3589,4 +3609,110 @@ pre {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-default) transparent;
+}
+
+/* --- Sessions / agentic log additions --- */
+
+.session-link {
+  color: var(--accent);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.session-link:hover {
+  text-decoration: underline;
+}
+
+.stop-reason-badge {
+  background: var(--warning-muted);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  color: var(--warning, #b45309);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pager-info {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.page-subtitle {
+  margin: -8px 0 16px;
+  font-size: 13px;
+}
+
+.bar-cell {
+  min-width: 120px;
+}
+
+.mini-bar-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 110px;
+}
+
+.mini-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--accent);
+  opacity: 0.55;
+  min-width: 2px;
+  flex-shrink: 0;
+  max-width: 70px;
+}
+
+.mini-bar-label {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.insights-panel {
+  border: 1px solid var(--border-default, #e4e4e7);
+  border-radius: var(--radius-md, 8px);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.insights-panel h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.insights-tool-results {
+  margin-top: 10px;
+}
+
+.insights-tool-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.session-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
 }

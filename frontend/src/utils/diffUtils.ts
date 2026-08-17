@@ -12,6 +12,7 @@ export function formatPercent(original: number | null | undefined, current: numb
     if (current === 0 || current === undefined || current === null) return ''
     return '(new)'
   }
+  if (current === undefined || current === null) return ''
   const percent = ((current - original) / original) * 100
   const prefix = percent > 0 ? '+' : ''
   return `(${prefix}${percent.toFixed(1)}%)`
