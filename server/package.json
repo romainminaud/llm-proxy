@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "test": "tsx --test",
+    "backfill": "tsx src/run-backfill.ts",
     "test:pricing": "tsx --test test/pricing.test.ts",
     "test:db": "tsx --test test/db.test.ts",
     "test:server": "tsx --test test/server.test.ts",

@@ -4,6 +4,8 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import LogsPage from './pages/LogsPage'
+import SessionsPage from './pages/SessionsPage'
+import TurnsPage from './pages/TurnsPage'
 import ComparisonsPage from './pages/ComparisonsPage'
 
 const router = createBrowserRouter([
@@ -13,6 +15,10 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/logs" replace /> },
       { path: 'logs', element: <LogsPage /> },
+      { path: 'sessions', element: <SessionsPage /> },
+      { path: 'sessions/:id', element: <SessionsPage /> },
+      { path: 'turns', element: <TurnsPage /> },
+      { path: 'turns/:sessionId/:turnId', element: <TurnsPage /> },
       { path: 'compare', element: <ComparisonsPage /> },
       { path: 'compare/:id', element: <ComparisonsPage /> },
     ],

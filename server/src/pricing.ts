@@ -66,17 +66,35 @@ export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
   'text-embedding-3-large': { input: 0.13, output: 0 },
   'text-embedding-ada-002': { input: 0.10, output: 0 },
 
-  // Gemini models
-  'gemini-3-pro-preview': { input: 2.00, cached: 0.50, output: 12.00 },
-  'gemini-3-flash-preview': { input: 0.50, cached: 0.125, output: 3.00 },
-  'gemini-2.5-pro': { input: 1.25, cached: 0.3125, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.15, cached: 0.0375, output: 0.60 },
+  // Gemini 3.x models
+  'gemini-3.1-pro-preview': { input: 2.00, cached: 0.20, output: 12.00 },
+  'gemini-3.1-pro-preview-customtools': { input: 2.00, cached: 0.20, output: 12.00 },
+  'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
+  'gemini-3-pro-preview': { input: 2.00, cached: 0.20, output: 12.00 },
+  'gemini-3-flash-preview': { input: 0.50, cached: 0.05, output: 3.00 },
+
+  // Gemini 2.5 models
+  'gemini-2.5-pro': { input: 1.25, cached: 0.125, output: 10.00 },
+  'gemini-2.5-flash': { input: 0.30, cached: 0.03, output: 2.50 },
+  'gemini-2.5-flash-lite': { input: 0.10, cached: 0.01, output: 0.40 },
+  'gemini-2.5-flash-lite-preview-09-2025': { input: 0.10, cached: 0.01, output: 0.40 },
+
+  // Gemini 2.0 models
   'gemini-2.0-flash': { input: 0.10, cached: 0.025, output: 0.40 },
-  'gemini-2.0-flash-lite': { input: 0.075, cached: 0.01875, output: 0.30 },
+  'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
+
+  // Gemini 1.5 models (legacy)
   'gemini-1.5-pro': { input: 1.25, cached: 0.3125, output: 5.00 },
   'gemini-1.5-flash': { input: 0.075, cached: 0.01875, output: 0.30 },
 
+  // Anthropic Claude 5 models
+  'claude-opus-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
+  'claude-sonnet-5': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
+  'claude-fable-5': { input: 10.00, cached: 1.00, cacheWrite: 12.50, output: 50.00 },
+
   // Anthropic Claude 4 models (base names for date-suffix fallback)
+  'claude-opus-4-8': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
+  'claude-opus-4-7': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
   'claude-opus-4-6': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
   'claude-sonnet-4-6': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
   'claude-opus-4-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
@@ -91,6 +109,26 @@ export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
   'claude-3-opus': { input: 15.00, cached: 1.50, cacheWrite: 18.75, output: 75.00 },
   'claude-3-sonnet': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
   'claude-3-haiku': { input: 0.25, cached: 0.03, cacheWrite: 0.3125, output: 1.25 },
+
+  // DeepSeek models (OpenRouter prices as of 2026-08; keys match the
+  // vendor-stripped OpenRouter ids, e.g. "deepseek/deepseek-v4-pro").
+  // Note: DeepSeek's own API bills peak/off-peak (peak = 2x these off-peak
+  // rates, 01:00-04:00 & 06:00-10:00 UTC); a static table can't model that.
+  'deepseek-v4-pro': { input: 0.66, cached: 0.022, output: 1.98 },
+  'deepseek-v4-pro-0813': { input: 0.66, cached: 0.022, output: 1.98 },
+  'deepseek-v4-flash': { input: 0.0826, cached: 0.0165, output: 0.1652 },
+  'deepseek-v4-flash-0731': { input: 0.14, cached: 0.028, output: 0.28 },
+  'deepseek-v3.2': { input: 0.269, cached: 0.1345, output: 0.40 },
+  'deepseek-v3.2-exp': { input: 0.27, output: 0.41 },
+  'deepseek-v3.1-terminus': { input: 0.27, output: 1.00 },
+  'deepseek-chat-v3.1': { input: 0.25, cached: 0.13, output: 0.95 },
+  'deepseek-chat-v3-0324': { input: 0.27, cached: 0.135, output: 1.12 },
+  'deepseek-chat': { input: 0.2574, output: 1.0287 },
+  'deepseek-r1': { input: 0.70, output: 2.50 },
+  'deepseek-r1-0528': { input: 0.50, cached: 0.35, output: 2.15 },
+  'deepseek-r1-distill-llama-70b': { input: 0.80, output: 0.80 },
+  // DeepSeek official-API alias (reasoning mode of the current flagship)
+  'deepseek-reasoner': { input: 0.66, cached: 0.022, output: 1.98 },
 };
 
 // Default pricing for unknown models
@@ -178,6 +216,19 @@ function getPricing(model: string): PricingEntry {
   baseModel = model.replace(/-\d{8}$/, '');
   if (MODEL_PRICING[baseModel]) {
     return MODEL_PRICING[baseModel];
+  }
+
+  // OpenRouter format: "vendor/model" with dotted versions
+  // (e.g. "anthropic/claude-sonnet-4.5" -> "claude-sonnet-4-5")
+  if (model.includes('/')) {
+    const withoutVendor = model.slice(model.indexOf('/') + 1);
+    const dashed = withoutVendor.replace(/(\d)\.(\d)/g, '$1-$2');
+    for (const candidate of [withoutVendor, dashed]) {
+      if (candidate !== model) {
+        const pricing = getPricing(candidate);
+        if (pricing !== DEFAULT_PRICING) return pricing;
+      }
+    }
   }
 
   return DEFAULT_PRICING;

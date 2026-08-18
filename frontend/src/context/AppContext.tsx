@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { DisplayStats, RequestRecord, Stats } from '../types'
+import { getToolNames } from '../utils/toolCalls'
 
 // In production, use relative URLs (same origin). In development, use the proxy or explicit URL.
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
@@ -29,38 +30,53 @@ const getCachedTokens = (request: RequestRecord) => (
 const computeDisplayStats = (requests: RequestRecord[]): DisplayStats => {
   let totalCost = 0
   let totalInputTokens = 0
+  let totalNonCachedTokens = 0
   let totalCachedTokens = 0
+  let totalCacheWriteTokens = 0
+  let totalReasoningTokens = 0
   let totalOutputTokens = 0
   let totalDurationMs = 0
   let totalInputCost = 0
   let totalCachedCost = 0
+  let totalCacheWriteCost = 0
   let totalOutputCost = 0
 
   requests.forEach(request => {
     totalInputTokens += getInputTokens(request)
+    totalNonCachedTokens += request.non_cached_input_tokens ?? getInputTokens(request)
     totalCachedTokens += getCachedTokens(request)
+    totalCacheWriteTokens += request.cache_write_tokens ?? 0
+    totalReasoningTokens += request.reasoning_tokens ?? 0
     totalOutputTokens += getOutputTokens(request)
     totalDurationMs += request.duration_ms || 0
 
     const inputCost = request.input_cost || 0
     const cachedCost = request.cached_cost || 0
+    const cacheWriteCost = request.cache_write_cost || 0
     const outputCost = request.output_cost || 0
     totalInputCost += inputCost
     totalCachedCost += cachedCost
+    totalCacheWriteCost += cacheWriteCost
     totalOutputCost += outputCost
-    totalCost += request.total_cost ?? (inputCost + cachedCost + outputCost)
+    totalCost += request.total_cost ?? (inputCost + cachedCost + cacheWriteCost + outputCost)
   })
+
+  const contextTokens = totalNonCachedTokens + totalCachedTokens + totalCacheWriteTokens
 
   return {
     totalRequests: requests.length,
     totalCost,
     totalInputTokens,
     totalCachedTokens,
+    totalCacheWriteTokens,
+    totalReasoningTokens,
     totalOutputTokens,
     totalDurationMs,
     totalInputCost,
     totalCachedCost,
-    totalOutputCost
+    totalCacheWriteCost,
+    totalOutputCost,
+    cacheHitRatio: contextTokens > 0 ? totalCachedTokens / contextTokens : null
   }
 }
 
@@ -78,6 +94,14 @@ type AppContextType = {
   // Filters
   modelFilter: string
   setModelFilter: (filter: string) => void
+  providerFilter: string
+  setProviderFilter: (filter: string) => void
+
+  // Pagination
+  page: number
+  setPage: (page: number) => void
+  pageSize: number
+  totalCount: number
 
   // Settings
   autoRefreshEnabled: boolean
@@ -124,9 +148,23 @@ const csvEscape = (value: string | number | null | undefined) => {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const PAGE_SIZE = 100
   const [requests, setRequests] = useState<RequestRecord[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
-  const [modelFilter, setModelFilter] = useState('')
+  const [modelFilter, setModelFilterState] = useState('')
+  const [providerFilter, setProviderFilterState] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+
+  // Changing a filter always returns to the first page
+  const setModelFilter = useCallback((filter: string) => {
+    setModelFilterState(filter)
+    setPage(0)
+  }, [])
+  const setProviderFilter = useCallback((filter: string) => {
+    setProviderFilterState(filter)
+    setPage(0)
+  }, [])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true)
   const [priceMultiplier, setPriceMultiplier] = useState(1)
@@ -134,13 +172,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [replayRequest, setReplayRequest] = useState<RequestRecord | null>(null)
 
   const loadData = useCallback(async () => {
+    const params = new URLSearchParams()
+    if (modelFilter) params.set('model', modelFilter)
+    if (providerFilter) params.set('provider', providerFilter)
+    params.set('limit', String(PAGE_SIZE))
+    params.set('offset', String(page * PAGE_SIZE))
     const [reqRes, statsRes] = await Promise.all([
-      fetch(`${API_BASE}/api/requests${modelFilter ? `?model=${encodeURIComponent(modelFilter)}` : ''}`),
+      fetch(`${API_BASE}/api/requests?${params.toString()}`),
       fetch(`${API_BASE}/api/stats`)
     ])
     const requestData = await reqRes.json()
     const statsData = await statsRes.json()
     const nextRequests = requestData as RequestRecord[]
+    const headerTotal = Number(reqRes.headers.get('X-Total-Count'))
+    setTotalCount(Number.isFinite(headerTotal) && headerTotal > 0 ? headerTotal : nextRequests.length)
     setRequests(nextRequests)
     setStats(statsData as Stats)
     setSelectedIds(prev => {
@@ -151,7 +196,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
       return next
     })
-  }, [modelFilter])
+  }, [modelFilter, providerFilter, page])
 
   useEffect(() => {
     loadData()
@@ -209,16 +254,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const headers = [
       'timestamp',
       'id',
+      'session_id',
       'model',
       'path',
       'input_tokens',
       'cached_tokens',
+      'cache_write_tokens',
       'output_tokens',
+      'reasoning_tokens',
       'input_cost',
       'cached_cost',
+      'cache_write_cost',
       'output_cost',
       'total_cost',
       'duration_ms',
+      'stop_reason',
       'replay_of',
       'tools_defined',
       'tool_calls_made',
@@ -229,43 +279,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const cachedTokens = getCachedTokens(request)
       const inputCost = request.input_cost || 0
       const cachedCost = request.cached_cost || 0
+      const cacheWriteCost = request.cache_write_cost || 0
       const outputCost = request.output_cost || 0
-      const totalCost = request.total_cost ?? (inputCost + cachedCost + outputCost)
+      const totalCost = request.total_cost ?? (inputCost + cachedCost + cacheWriteCost + outputCost)
 
+      // Prefer stored columns; fall back to body parsing for pre-extraction rows
       const body = request.request_body as Record<string, unknown> | null
-      const toolsDefined = Array.isArray(body?.tools) ? (body.tools as unknown[]).length : ''
-
-      const resp = request.response_body as Record<string, unknown> | null
-      // OpenAI: choices[0].message.tool_calls
-      const openaiToolCalls = (resp?.choices as Array<Record<string, unknown>> | undefined)?.[0]
-        ?.message as Record<string, unknown> | undefined
-      const openaiCalls = Array.isArray(openaiToolCalls?.tool_calls)
-        ? (openaiToolCalls!.tool_calls as Array<Record<string, unknown>>)
-        : null
-      // Anthropic: content[].type === 'tool_use'
-      const anthropicCalls = Array.isArray(resp?.content)
-        ? (resp!.content as Array<Record<string, unknown>>).filter(c => c.type === 'tool_use')
-        : null
-
-      const toolCallItems = openaiCalls ?? anthropicCalls ?? []
-      const toolCallsMade = toolCallItems.length > 0 ? toolCallItems.length : ''
-      const toolNamesCalled = toolCallItems.length > 0
-        ? toolCallItems.map(c => (c.function as Record<string, unknown>)?.name ?? c.name ?? '').join(';')
-        : ''
+      const toolsDefined = request.tools_defined_count
+        ?? (Array.isArray(body?.tools) ? (body.tools as unknown[]).length : '')
+      const toolNames = getToolNames(request)
+      const toolCallsMade = request.tool_calls_count ?? (toolNames.length > 0 ? toolNames.length : '')
+      const toolNamesCalled = toolNames.join(';')
 
       return [
         timestamp,
         request.id,
+        request.session_id ?? '',
         request.model || '',
         request.path || '',
         request.input_tokens ?? '',
         cachedTokens || '',
+        request.cache_write_tokens ?? '',
         request.output_tokens ?? '',
+        request.reasoning_tokens ?? '',
         inputCost,
         cachedCost,
+        cacheWriteCost,
         outputCost,
         totalCost,
         request.duration_ms ?? '',
+        request.stop_reason ?? '',
         request.replay_of || '',
         toolsDefined,
         toolCallsMade,
@@ -297,10 +340,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ['total_cost', stats.totalCost.toFixed(6)],
       ['input_tokens', stats.totalInputTokens],
       ['cached_tokens', stats.totalCachedTokens],
+      ['cache_write_tokens', stats.totalCacheWriteTokens],
+      ['reasoning_tokens', stats.totalReasoningTokens],
       ['output_tokens', stats.totalOutputTokens],
+      ['cache_hit_ratio', stats.cacheHitRatio === null ? '' : stats.cacheHitRatio.toFixed(4)],
       ['total_duration_ms', stats.totalDurationMs],
       ['input_cost', stats.totalInputCost.toFixed(6)],
       ['cached_cost', stats.totalCachedCost.toFixed(6)],
+      ['cache_write_cost', stats.totalCacheWriteCost.toFixed(6)],
       ['output_cost', stats.totalOutputCost.toFixed(6)]
     ]
     const csvContent = [
@@ -328,6 +375,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     displayStats,
     modelFilter,
     setModelFilter,
+    providerFilter,
+    setProviderFilter,
+    page,
+    setPage,
+    pageSize: PAGE_SIZE,
+    totalCount,
     autoRefreshEnabled,
     setAutoRefreshEnabled,
     priceMultiplier,

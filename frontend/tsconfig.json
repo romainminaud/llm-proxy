@@ -11,7 +11,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src"]
 }

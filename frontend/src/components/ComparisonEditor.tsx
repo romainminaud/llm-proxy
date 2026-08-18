@@ -416,7 +416,7 @@ export default function ComparisonEditor({ comparison, initialRequest, onSave, o
               max={128000}
             />
           </div>
-          <button className="btn-save" onClick={handleSave}>
+          <button className="btn-save" onClick={() => handleSave()}>
             Save
           </button>
           <button

@@ -359,7 +359,12 @@ async function executeComparison(
     }
 
     const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } = providerConfig.extractTokenUsage(usage);
-    const { totalInputTokens, nonCachedInputTokens, cachedInputTokens } = getTokenSplit(inputTokens, cacheReadTokens);
+    const { totalInputTokens, nonCachedInputTokens, cachedInputTokens } = getTokenSplit(
+      inputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      providerConfig.inputTokensIncludeCache
+    );
 
     let costInfo: CostInfo = { inputCost: 0, cachedCost: 0, cacheWriteCost: 0, outputCost: 0, totalCost: 0 };
     costInfo = calculateCost(actualModel, nonCachedInputTokens, outputTokens, cachedInputTokens, cacheWriteTokens);

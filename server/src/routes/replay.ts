@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { extractAgentMeta } from '../agent-meta.js';
 import { calculateCost, type CostInfo } from '../pricing.js';
 import { saveRequest, getRequest } from '../db.js';
 import { forward, getProvider } from '../providers.js';
@@ -37,13 +38,20 @@ router.post('/api/replay/:id', async (req: Request, res: Response) => {
     const actualModel = (response.model as string) || (requestBody as { model?: string })?.model || original.model;
 
     // Extract token usage and calculate cost
-    const usage = response.usage as Record<string, unknown> | undefined;
+    const usage = (response.usage ?? response.usageMetadata) as Record<string, unknown> | undefined;
     const { inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens } = provider.extractTokenUsage(usage);
-    const { totalInputTokens, nonCachedInputTokens, cachedInputTokens } = getTokenSplit(inputTokens, cacheReadTokens);
+    const { totalInputTokens, nonCachedInputTokens, cachedInputTokens } = getTokenSplit(
+      inputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      provider.inputTokensIncludeCache
+    );
     let costInfo: CostInfo = { inputCost: 0, cachedCost: 0, cacheWriteCost: 0, outputCost: 0, totalCost: 0 };
     if (actualModel) {
       costInfo = calculateCost(actualModel, nonCachedInputTokens, outputTokens, cachedInputTokens, cacheWriteTokens);
     }
+
+    const meta = extractAgentMeta(providerName, requestBody, response, usage);
 
     // Save the replay request with reference to original
     saveRequest({
@@ -70,6 +78,17 @@ router.post('/api/replay/:id', async (req: Request, res: Response) => {
       outputCost: costInfo.outputCost,
       totalCost: costInfo.totalCost,
       replayOf: original.id,
+      sessionId: meta.sessionId,
+      agentEntrypoint: meta.agentEntrypoint,
+      agentVersion: meta.agentVersion,
+      toolsDefinedCount: meta.toolsDefinedCount,
+      toolCallsCount: meta.toolCallsCount,
+      toolNames: meta.toolNames,
+      reasoningTokens: meta.reasoningTokens,
+      stopReason: meta.stopReason,
+      messageCount: meta.messageCount,
+      requestBytes: meta.requestBytes,
+      responseBytes: meta.responseBytes,
     });
 
     console.log(`[${replayId}] Replay of ${original.id} completed in ${durationMs}ms`);

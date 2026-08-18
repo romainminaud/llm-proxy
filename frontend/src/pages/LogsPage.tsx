@@ -17,6 +17,12 @@ export default function LogsPage() {
     selectedRequests,
     modelFilter,
     setModelFilter,
+    providerFilter,
+    setProviderFilter,
+    page,
+    setPage,
+    pageSize,
+    totalCount,
     autoRefreshEnabled,
     setAutoRefreshEnabled,
     priceMultiplier,
@@ -55,8 +61,8 @@ export default function LogsPage() {
   }
 
   return (
-    <div className="logs-page">
-      <h1 className="page-title">Request Logs</h1>
+    <div>
+      <h1 className="mb-4 text-xl font-semibold tracking-tight text-ink">Request logs</h1>
 
       <StatsCards
         stats={displayStats}
@@ -68,6 +74,12 @@ export default function LogsPage() {
         modelFilter={modelFilter}
         stats={stats}
         onModelFilterChange={setModelFilter}
+        providerFilter={providerFilter}
+        onProviderFilterChange={setProviderFilter}
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={setPage}
         onRefresh={loadData}
         onClearAll={clearAll}
         onSettings={() => setShowSettingsModal(true)}
