@@ -16,6 +16,8 @@ export type AgentMeta = {
   sessionId: string | null;
   /** Verbatim x-llm-proxy-turn-id header value; null when the client didn't tag the request. */
   turnId: string | null;
+  /** Snippet of the last genuine user message in the request — the prompt that started the current turn. */
+  turnPrompt: string | null;
   /** cc_entrypoint from the Claude Code billing header block (e.g. "sdk-cli"). */
   agentEntrypoint: string | null;
   /** cc_version from the Claude Code billing header block. */
@@ -173,6 +175,38 @@ function extractSessionId(providerName: string, body: Dict): string | null {
     .digest('hex')
     .slice(0, 16);
   return `h:${hash}`;
+}
+
+const TURN_PROMPT_MAX_CHARS = 240;
+
+/**
+ * The last genuine user message in the request — the prompt that started the
+ * current turn. Walks messages from the end; tool plumbing (tool_result
+ * blocks, role:"tool" messages, functionResponse parts) yields empty text via
+ * contentToText and is skipped, so agent-loop continuations resolve to the
+ * same prompt as the turn's first request.
+ */
+function extractTurnPrompt(providerName: string, body: Dict): string | null {
+  const messages =
+    providerName === 'gemini'
+      ? asArray(body.contents)
+      : asArray(body.messages) ?? asArray(body.input);
+  if (!messages) return null;
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = asDict(messages[i]);
+    if (!message || asString(message.role) !== 'user') continue;
+    const text =
+      providerName === 'gemini'
+        ? (asArray(message.parts) ?? [])
+            .map((p) => asString(asDict(p)?.text) ?? '')
+            .filter(Boolean)
+            .join('\n')
+        : contentToText(message.content);
+    const trimmed = text.trim();
+    if (trimmed) return trimmed.slice(0, TURN_PROMPT_MAX_CHARS);
+  }
+  return null;
 }
 
 /**
@@ -333,6 +367,7 @@ export function extractAgentMeta(
     // Header-only for now: turns can't be recovered from stored bodies, so
     // backfill must never overwrite this column (headers aren't persisted).
     turnId: overrides?.turnId ?? null,
+    turnPrompt: request ? extractTurnPrompt(providerName, request) : null,
     agentEntrypoint: identity.entrypoint,
     agentVersion: identity.version,
     toolsDefinedCount: request ? toolsDefinedCount(providerName, request) : null,

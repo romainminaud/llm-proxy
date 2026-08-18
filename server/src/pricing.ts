@@ -109,6 +109,26 @@ export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
   'claude-3-opus': { input: 15.00, cached: 1.50, cacheWrite: 18.75, output: 75.00 },
   'claude-3-sonnet': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
   'claude-3-haiku': { input: 0.25, cached: 0.03, cacheWrite: 0.3125, output: 1.25 },
+
+  // DeepSeek models (OpenRouter prices as of 2026-08; keys match the
+  // vendor-stripped OpenRouter ids, e.g. "deepseek/deepseek-v4-pro").
+  // Note: DeepSeek's own API bills peak/off-peak (peak = 2x these off-peak
+  // rates, 01:00-04:00 & 06:00-10:00 UTC); a static table can't model that.
+  'deepseek-v4-pro': { input: 0.66, cached: 0.022, output: 1.98 },
+  'deepseek-v4-pro-0813': { input: 0.66, cached: 0.022, output: 1.98 },
+  'deepseek-v4-flash': { input: 0.0826, cached: 0.0165, output: 0.1652 },
+  'deepseek-v4-flash-0731': { input: 0.14, cached: 0.028, output: 0.28 },
+  'deepseek-v3.2': { input: 0.269, cached: 0.1345, output: 0.40 },
+  'deepseek-v3.2-exp': { input: 0.27, output: 0.41 },
+  'deepseek-v3.1-terminus': { input: 0.27, output: 1.00 },
+  'deepseek-chat-v3.1': { input: 0.25, cached: 0.13, output: 0.95 },
+  'deepseek-chat-v3-0324': { input: 0.27, cached: 0.135, output: 1.12 },
+  'deepseek-chat': { input: 0.2574, output: 1.0287 },
+  'deepseek-r1': { input: 0.70, output: 2.50 },
+  'deepseek-r1-0528': { input: 0.50, cached: 0.35, output: 2.15 },
+  'deepseek-r1-distill-llama-70b': { input: 0.80, output: 0.80 },
+  // DeepSeek official-API alias (reasoning mode of the current flagship)
+  'deepseek-reasoner': { input: 0.66, cached: 0.022, output: 1.98 },
 };
 
 // Default pricing for unknown models
@@ -196,6 +216,19 @@ function getPricing(model: string): PricingEntry {
   baseModel = model.replace(/-\d{8}$/, '');
   if (MODEL_PRICING[baseModel]) {
     return MODEL_PRICING[baseModel];
+  }
+
+  // OpenRouter format: "vendor/model" with dotted versions
+  // (e.g. "anthropic/claude-sonnet-4.5" -> "claude-sonnet-4-5")
+  if (model.includes('/')) {
+    const withoutVendor = model.slice(model.indexOf('/') + 1);
+    const dashed = withoutVendor.replace(/(\d)\.(\d)/g, '$1-$2');
+    for (const candidate of [withoutVendor, dashed]) {
+      if (candidate !== model) {
+        const pricing = getPricing(candidate);
+        if (pricing !== DEFAULT_PRICING) return pricing;
+      }
+    }
   }
 
   return DEFAULT_PRICING;

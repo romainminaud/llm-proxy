@@ -53,16 +53,23 @@ const openai: ProviderConfig = {
   extractTokenUsage: (usage) => ({
     inputTokens: usage?.prompt_tokens || usage?.input_tokens || 0,
     outputTokens: usage?.completion_tokens || usage?.output_tokens || 0,
-    cacheReadTokens: usage?.prompt_tokens_details?.cached_tokens || 0,
+    // Chat Completions nests cache reads under prompt_tokens_details,
+    // the Responses API under input_tokens_details.
+    cacheReadTokens:
+      usage?.prompt_tokens_details?.cached_tokens ||
+      usage?.input_tokens_details?.cached_tokens ||
+      0,
     cacheWriteTokens: 0,
   }),
   parseErrorMessage: (data: unknown) =>
     (data as { error?: { message?: string } })?.error?.message || 'OpenAI API error',
-  // OpenAI only reports usage in a stream when stream_options.include_usage is set.
-  // Inject it (without clobbering other options) so cost tracking works for streamed
-  // chat completions / responses. Harmless for clients that don't read the final chunk.
-  prepareStreamBody: (body) => {
+  // Chat Completions only reports usage in a stream when
+  // stream_options.include_usage is set. The Responses API (/v1/responses)
+  // rejects that parameter — and doesn't need it, its final
+  // response.completed event always carries usage.
+  prepareStreamBody: (body, path) => {
     if (!body || typeof body !== 'object') return body;
+    if (!path.includes('/chat/completions')) return body;
     const b = body as Record<string, unknown>;
     const existing = (b.stream_options as Record<string, unknown> | undefined) ?? {};
     return { ...b, stream_options: { ...existing, include_usage: true } };
@@ -140,7 +147,40 @@ const gemini: ProviderConfig = {
   replayApiKeyPlaceholder: 'AIza...',
 };
 
-export const providers: Record<string, ProviderConfig> = { openai, anthropic, gemini };
+// OpenRouter speaks the OpenAI wire format (chat completions + usage shape),
+// so everything downstream (streaming accumulator, token extraction,
+// agent-meta) reuses the OpenAI code paths via the same conventions.
+const openrouter: ProviderConfig = {
+  name: 'openrouter',
+  baseUrl: config.openrouterBaseUrl,
+  buildHeaders: (apiKey, req) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    };
+    // OpenRouter's optional app-attribution headers: forward them when the
+    // client sends them (upstream headers are otherwise rebuilt from scratch).
+    const referer = req?.headers['http-referer'] ?? req?.headers.referer;
+    if (typeof referer === 'string') headers['HTTP-Referer'] = referer;
+    const title = req?.headers['x-title'];
+    if (typeof title === 'string') headers['X-Title'] = title;
+    return headers;
+  },
+  extractApiKey: (req) => req.headers.authorization?.replace('Bearer ', ''),
+  extractTokenUsage: openai.extractTokenUsage,
+  parseErrorMessage: (data: unknown) =>
+    (data as { error?: { message?: string } })?.error?.message || 'OpenRouter API error',
+  prepareStreamBody: openai.prepareStreamBody,
+  inputTokensIncludeCache: true,
+  routePrefix: '/openrouter',
+  stripPrefix: '\\/openrouter',
+  // Client base URLs with or without /v1 both work (endpoints live under /v1)
+  normalizePath: (path) => (path.startsWith('/v1/') ? path : `/v1${path}`),
+  replayApiKeyHeader: 'x-openrouter-api-key',
+  replayApiKeyPlaceholder: 'sk-or-...',
+};
+
+export const providers: Record<string, ProviderConfig> = { openai, anthropic, gemini, openrouter };
 
 export function getProvider(name: string): ProviderConfig {
   const provider = providers[name];

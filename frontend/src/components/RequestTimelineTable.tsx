@@ -1,15 +1,28 @@
 import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableNum,
+  TableRow,
+} from '@/components/ui/table'
 import type { SessionRequest, TurnSummary } from '../types'
 import { formatDuration, formatTokens, stripModelSuffix } from '../utils/format'
 
-// Pure-CSS horizontal bar, scaled against the largest value in its column
+// Horizontal bar scaled against the largest value in its column
 function Bar({ value, max, label }: { value: number; max: number; label: string }) {
   const width = max > 0 ? Math.max(2, (value / max) * 100) : 0
   return (
-    <div className="mini-bar-wrap" title={label}>
-      <div className="mini-bar" style={{ width: `${width}%` }} />
-      <span className="mini-bar-label">{label}</span>
+    <div className="relative h-4 min-w-24 overflow-hidden rounded-sm bg-elevated" title={label}>
+      <div className="h-full bg-accent/25" style={{ width: `${width}%` }} />
+      <span className="absolute inset-y-0 left-1.5 flex items-center font-mono text-[11px] tabular-nums text-ink-secondary">
+        {label}
+      </span>
     </div>
   )
 }
@@ -30,115 +43,126 @@ export default function RequestTimelineTable({ requests, onView, turns, turnLink
   const turnById = new Map((turns ?? []).map(turn => [turn.turn_id, turn]))
 
   return (
-    <div className="table-wrap">
-      <table className="requests-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Time</th>
-            <th>Model</th>
-            <th>Context</th>
-            <th>Δ Context</th>
-            <th>Cache Read</th>
-            <th>Cache Write</th>
-            <th>Output</th>
-            <th>Reasoning</th>
-            <th>Tools</th>
-            <th>Stop</th>
-            <th>Cost</th>
-            <th>Duration</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {requests.map((request, i) => {
-            const previousTurnId = i > 0 ? requests[i - 1].turn_id : null
-            const turn =
-              request.turn_id && request.turn_id !== previousTurnId
-                ? turnById.get(request.turn_id)
-                : undefined
-            return (
-              <Fragment key={request.id}>
-                {turn && (
-                  <tr className="turn-header-row">
-                    <td colSpan={14}>
-                      {turnLinkBase ? (
-                        <Link
-                          to={`${turnLinkBase}/${encodeURIComponent(turn.turn_id)}`}
-                          className="session-link turn-id"
-                          title={turn.turn_id}
-                        >
-                          Turn {turn.turn_id}
-                        </Link>
-                      ) : (
-                        <span className="turn-id" title={turn.turn_id}>Turn {turn.turn_id}</span>
-                      )}
-                      <span className="muted">
-                        {' '}· {turn.request_count} req{turn.request_count === 1 ? '' : 's'}
-                        {turn.error_count > 0 && ` (${turn.error_count}✗)`}
-                        {' '}· {formatDuration(turn.wall_ms)} wall / {formatDuration(turn.api_ms)} api
-                        {' '}· out {formatTokens(turn.output_tokens)}
-                        {' '}· {turn.tool_calls} tools
-                        {' '}· ${turn.total_cost.toFixed(4)}
-                      </span>
-                    </td>
-                  </tr>
-                )}
-                <tr className={request.error ? 'error-row' : ''}>
-                  <td className="tokens">{request.seq}</td>
-                  <td>{new Date(request.timestamp).toLocaleTimeString()}</td>
-                  <td>
-                    {request.model
-                      ? <span className="model-badge">{stripModelSuffix(request.model)}</span>
-                      : <span className="muted">-</span>}
-                  </td>
-                  <td className="bar-cell">
-                    <Bar
-                      value={request.total_input_tokens ?? 0}
-                      max={maxContext}
-                      label={formatTokens(request.total_input_tokens)}
-                    />
-                  </td>
-                  <td className="tokens">
-                    {request.context_growth === null
-                      ? <span className="muted">-</span>
-                      : `${request.context_growth >= 0 ? '+' : ''}${request.context_growth.toLocaleString()}`}
-                  </td>
-                  <td className="tokens">{formatTokens(request.cached_tokens)}</td>
-                  <td className="tokens">{formatTokens(request.cache_write_tokens)}</td>
-                  <td className="tokens">{formatTokens(request.output_tokens)}</td>
-                  <td className="tokens">{formatTokens(request.reasoning_tokens)}</td>
-                  <td className="tool-calls-cell">
-                    {request.tool_names && request.tool_names.length > 0 ? (
-                      <div className="tool-call-list">
-                        {request.tool_names.map((name, j) => (
-                          <span key={`${name}-${j}`} className="tool-call-badge">{name}</span>
-                        ))}
-                      </div>
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="text-right">#</TableHead>
+          <TableHead>Time</TableHead>
+          <TableHead>Model</TableHead>
+          <TableHead>Context</TableHead>
+          <TableHead className="text-right">Δ Context</TableHead>
+          <TableHead className="text-right">Cache read</TableHead>
+          <TableHead className="text-right">Cache write</TableHead>
+          <TableHead className="text-right">Output</TableHead>
+          <TableHead className="text-right">Reasoning</TableHead>
+          <TableHead>Tools</TableHead>
+          <TableHead>Stop</TableHead>
+          <TableHead>Cost</TableHead>
+          <TableHead className="text-right">Duration</TableHead>
+          <TableHead></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {requests.map((request, i) => {
+          const previousTurnId = i > 0 ? requests[i - 1].turn_id : null
+          const turn =
+            request.turn_id && request.turn_id !== previousTurnId
+              ? turnById.get(request.turn_id)
+              : undefined
+          return (
+            <Fragment key={request.id}>
+              {turn && (
+                <TableRow className="border-t border-line bg-elevated/70 hover:bg-elevated/70">
+                  <TableCell colSpan={14} className="py-1.5">
+                    {turnLinkBase ? (
+                      <Link
+                        to={`${turnLinkBase}/${encodeURIComponent(turn.turn_id)}`}
+                        className="font-mono text-xs font-semibold text-accent hover:underline"
+                        title={turn.turn_id}
+                      >
+                        Turn {turn.turn_number} · {turn.turn_id}
+                      </Link>
                     ) : (
-                      <span className="muted">-</span>
+                      <span className="font-mono text-xs font-semibold text-ink" title={turn.turn_id}>
+                        Turn {turn.turn_number} · {turn.turn_id}
+                      </span>
                     )}
-                  </td>
-                  <td>
-                    {request.stop_reason
-                      ? <span className="stop-reason-badge">{request.stop_reason}</span>
-                      : <span className="muted">-</span>}
-                  </td>
-                  <td className="bar-cell">
-                    <Bar
-                      value={request.total_cost ?? 0}
-                      max={maxCost}
-                      label={`$${(request.total_cost ?? 0).toFixed(4)}`}
-                    />
-                  </td>
-                  <td className="duration">{request.duration_ms}ms</td>
-                  <td><button onClick={() => onView(request.id)}>View</button></td>
-                </tr>
-              </Fragment>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+                    <span className="ml-2 font-mono text-[11px] tabular-nums text-ink-tertiary">
+                      ${turn.total_cost.toFixed(4)}
+                      {' '}· {turn.request_count} req{turn.request_count === 1 ? '' : 's'}
+                      {turn.error_count > 0 && ` (${turn.error_count}✗)`}
+                      {' '}· {formatDuration(turn.wall_ms)} wall / {formatDuration(turn.api_ms)} api
+                      {' '}· out {formatTokens(turn.output_tokens)}
+                      {' '}· {turn.tool_calls} tools
+                    </span>
+                    {turn.turn_prompt && (
+                      <span className="ml-2 text-xs text-ink-secondary" title={turn.turn_prompt}>
+                        {turn.turn_prompt.length > 110
+                          ? `${turn.turn_prompt.slice(0, 110)}…`
+                          : turn.turn_prompt}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )}
+              <TableRow data-state={request.error ? 'error' : undefined}>
+                <TableNum className="text-ink-muted">{request.seq}</TableNum>
+                <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-tertiary">
+                  {new Date(request.timestamp).toLocaleTimeString()}
+                </TableCell>
+                <TableCell>
+                  {request.model
+                    ? <Badge>{stripModelSuffix(request.model)}</Badge>
+                    : <span className="text-ink-muted">-</span>}
+                </TableCell>
+                <TableCell className="w-36">
+                  <Bar
+                    value={request.total_input_tokens ?? 0}
+                    max={maxContext}
+                    label={formatTokens(request.total_input_tokens)}
+                  />
+                </TableCell>
+                <TableNum>
+                  {request.context_growth === null
+                    ? <span className="text-ink-muted">-</span>
+                    : `${request.context_growth >= 0 ? '+' : ''}${request.context_growth.toLocaleString()}`}
+                </TableNum>
+                <TableNum>{formatTokens(request.cached_tokens)}</TableNum>
+                <TableNum>{formatTokens(request.cache_write_tokens)}</TableNum>
+                <TableNum>{formatTokens(request.output_tokens)}</TableNum>
+                <TableNum>{formatTokens(request.reasoning_tokens)}</TableNum>
+                <TableCell className="max-w-52">
+                  {request.tool_names && request.tool_names.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {request.tool_names.map((name, j) => (
+                        <Badge variant="outline" key={`${name}-${j}`}>{name}</Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-ink-muted">-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {request.stop_reason
+                    ? <Badge variant="accent">{request.stop_reason}</Badge>
+                    : <span className="text-ink-muted">-</span>}
+                </TableCell>
+                <TableCell className="w-28">
+                  <Bar
+                    value={request.total_cost ?? 0}
+                    max={maxCost}
+                    label={`$${(request.total_cost ?? 0).toFixed(4)}`}
+                  />
+                </TableCell>
+                <TableNum>{request.duration_ms}ms</TableNum>
+                <TableCell>
+                  <Button size="sm" variant="ghost" onClick={() => onView(request.id)}>View</Button>
+                </TableCell>
+              </TableRow>
+            </Fragment>
+          )
+        })}
+      </TableBody>
+    </Table>
   )
 }

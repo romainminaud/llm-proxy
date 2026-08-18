@@ -1,5 +1,4 @@
 import { Outlet } from 'react-router-dom'
-import './App.css'
 import ErrorBoundary from './components/ErrorBoundary'
 import ReplayModal from './components/ReplayModal'
 import SettingsModal from './components/SettingsModal'

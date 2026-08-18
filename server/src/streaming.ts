@@ -57,6 +57,9 @@ export class StreamUsageAccumulator {
   // tool call fragments keyed by index, accumulated across delta chunks
   private openaiToolCalls: Record<number, { id?: string; name?: string; args: string }> = {};
   private sawOpenaiChunk = false;
+  // Responses API: the terminal event carries the complete native response,
+  // so no reconstruction is needed — keep it verbatim.
+  private openaiResponse: Record<string, unknown> | null = null;
 
   // --- Gemini reconstruction state ---
   // Parts in stream order; consecutive text parts are merged, non-text parts
@@ -166,6 +169,26 @@ export class StreamUsageAccumulator {
   }
 
   private processOpenAiChunk(event: Record<string, unknown>): void {
+    // Responses API events are typed "response.*"; the terminal ones embed
+    // the full response object with model + usage.
+    const eventType = event.type as string | undefined;
+    if (eventType?.startsWith('response.')) {
+      if (
+        eventType === 'response.completed' ||
+        eventType === 'response.incomplete' ||
+        eventType === 'response.failed'
+      ) {
+        const response = event.response as Record<string, unknown> | undefined;
+        if (response) {
+          this.openaiResponse = response;
+          this.model = (response.model as string) ?? this.model;
+          const responseUsage = response.usage as Record<string, unknown> | undefined;
+          if (responseUsage) this.usage = responseUsage;
+        }
+      }
+      return;
+    }
+
     this.model = (event.model as string) ?? this.model;
     const u = event.usage as Record<string, unknown> | undefined | null;
     if (u) this.usage = u;
@@ -309,6 +332,10 @@ export class StreamUsageAccumulator {
         ...(this.usage ? { usageMetadata: this.usage } : {}),
       };
     }
+
+    // OpenAI Responses API: the final event's response object is already the
+    // native non-streamed shape.
+    if (this.openaiResponse) return this.openaiResponse;
 
     // OpenAI chat completions.
     if (!this.sawOpenaiChunk) return null;

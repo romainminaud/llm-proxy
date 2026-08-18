@@ -1,54 +1,63 @@
-:root {
-  /* Background surfaces */
-  --bg-base: #09090b;
-  --bg-surface: #111113;
-  --bg-elevated: #18181b;
-  --bg-overlay: #1c1c1f;
-  --bg-hover: #27272a;
-  --bg-active: #303033;
+/* Tailwind v4 without preflight: the legacy stylesheet (App.css) owns base
+   element styling; Tailwind supplies the theme + utilities for the new
+   shadcn-style components. App.css loads into the lowest-priority layer so
+   its element-level rules (button, select, …) never beat utility classes. */
+@layer legacy, theme, base, components, utilities;
+@import "./App.css" layer(legacy);
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
 
-  /* Borders */
-  --border-subtle: #1e1e21;
-  --border-default: #27272a;
-  --border-strong: #3f3f46;
-  --border-focus: #3b82f6;
+:root {
+  /* Background surfaces — warm paper base, white cards */
+  --bg-base: #f7f7f5;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f4f4f2;
+  --bg-overlay: #ffffff;
+  --bg-hover: #efefec;
+  --bg-active: #e8e8e4;
+
+  /* Borders — hairlines, never heavier than the data */
+  --border-subtle: #ececea;
+  --border-default: #e3e3df;
+  --border-strong: #cfcfc9;
+  --border-focus: #0f766e;
 
   /* Text */
-  --text-primary: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-tertiary: #71717a;
-  --text-muted: #52525b;
+  --text-primary: #1c1c1a;
+  --text-secondary: #575752;
+  --text-tertiary: #85857e;
+  --text-muted: #a3a39b;
 
-  /* Accent */
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-muted: rgba(59, 130, 246, 0.12);
-  --accent-text: #60a5fa;
+  /* Accent — teal instrument accent */
+  --accent: #0f766e;
+  --accent-hover: #115e59;
+  --accent-muted: rgba(15, 118, 110, 0.08);
+  --accent-text: #0f766e;
 
   /* Semantic */
-  --success: #22c55e;
-  --success-muted: rgba(34, 197, 94, 0.12);
-  --warning: #eab308;
-  --warning-muted: rgba(234, 179, 8, 0.12);
-  --danger: #ef4444;
-  --danger-muted: rgba(239, 68, 68, 0.12);
-  --info: #06b6d4;
-  --info-muted: rgba(6, 182, 212, 0.12);
+  --success: #15803d;
+  --success-muted: rgba(21, 128, 61, 0.09);
+  --warning: #a16207;
+  --warning-muted: rgba(161, 98, 7, 0.1);
+  --danger: #dc2626;
+  --danger-muted: rgba(220, 38, 38, 0.07);
+  --info: #0e7490;
+  --info-muted: rgba(14, 116, 144, 0.09);
 
   /* Role colors */
-  --role-system: #a78bfa;
-  --role-user: #4ade80;
-  --role-assistant: #60a5fa;
-  --role-tool: #fb923c;
+  --role-system: #7c3aed;
+  --role-user: #15803d;
+  --role-assistant: #1d4ed8;
+  --role-tool: #c2410c;
 
   /* Provider colors */
-  --provider-openai: #10a37f;
-  --provider-anthropic: #d4a574;
-  --provider-gemini: #4285f4;
+  --provider-openai: #0d8f6f;
+  --provider-anthropic: #b0722f;
+  --provider-gemini: #2f6fe4;
 
   /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', Monaco, monospace;
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Monaco, monospace;
 
   /* Radius */
   --radius-sm: 4px;
@@ -56,10 +65,10 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  /* Shadows — barely-there on paper */
+  --shadow-sm: 0 1px 2px rgba(28, 28, 26, 0.05);
+  --shadow-md: 0 2px 8px rgba(28, 28, 26, 0.07);
+  --shadow-lg: 0 12px 32px rgba(28, 28, 26, 0.12);
 
   /* Transitions */
   --transition-fast: 100ms ease;
@@ -69,13 +78,37 @@
   font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
-  color-scheme: dark;
+  color-scheme: light;
   color: var(--text-secondary);
   background-color: var(--bg-base);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Expose the palette to Tailwind utilities (bg-surface, text-tertiary, …) */
+@theme inline {
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-hover: var(--bg-hover);
+  --color-active: var(--bg-active);
+  --color-line: var(--border-default);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-tertiary: var(--text-tertiary);
+  --color-ink-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-muted: var(--accent-muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Monaco, monospace;
 }
 
 body {
@@ -86,4 +119,15 @@ body {
 
 #root {
   width: 100%;
+}
+
+/* Micro-label: the app's data vocabulary — uppercase mono, wide tracking.
+   Used by stat cards, table headers, and section eyebrows. */
+.microlabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }

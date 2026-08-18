@@ -42,6 +42,7 @@ export function backfillAgentMeta(db: Database.Database): void {
   const update = db.prepare(`
     UPDATE requests SET
       session_id = ?,
+      turn_prompt = ?,
       agent_entrypoint = ?,
       agent_version = ?,
       tools_defined_count = ?,
@@ -60,8 +61,12 @@ export function backfillAgentMeta(db: Database.Database): void {
       const requestBody = parseJson(row.request_body);
       const responseBody = parseJson(row.response_body);
       const meta = extractAgentMeta(row.provider, requestBody, responseBody);
+      // turn_id is deliberately not backfilled: it comes only from the
+      // x-llm-proxy-turn-id header, which isn't stored. turn_prompt is
+      // body-derived, so old rows do get it.
       update.run(
         meta.sessionId,
+        meta.turnPrompt,
         meta.agentEntrypoint,
         meta.agentVersion,
         meta.toolsDefinedCount,

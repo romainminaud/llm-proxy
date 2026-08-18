@@ -79,8 +79,8 @@ test('migration 3 applies to a v2 database and backfills agentic columns', async
   const db = initDatabase(dbPath)
 
   const version = db.prepare('SELECT MAX(version) as v FROM schema_migrations').get() as { v: number }
-  // Latest schema version (migration 4 added turn_id)
-  assert.equal(version.v, 4)
+  // Latest schema version (migration 5 added turn_prompt)
+  assert.equal(version.v, 5)
 
   const row = db.prepare(
     'SELECT session_id, agent_entrypoint, agent_version, tool_calls_count, tool_names, reasoning_tokens, stop_reason, message_count FROM requests WHERE id = ?'

@@ -61,8 +61,8 @@ export default function LogsPage() {
   }
 
   return (
-    <div className="logs-page">
-      <h1 className="page-title">Request Logs</h1>
+    <div>
+      <h1 className="mb-4 text-xl font-semibold tracking-tight text-ink">Request logs</h1>
 
       <StatsCards
         stats={displayStats}

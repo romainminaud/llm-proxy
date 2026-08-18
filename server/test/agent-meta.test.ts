@@ -256,6 +256,51 @@ test('header overrides: agent name without version', () => {
   assert.equal(overrides.agentVersion, null)
 })
 
+test('turn prompt: last genuine user message; tool plumbing is skipped', () => {
+  // Anthropic: tool_result continuations resolve to the turn's real prompt
+  const anthropicLoop = {
+    messages: [
+      { role: 'user', content: 'fix the login bug' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: {} }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'file contents' }] },
+    ],
+  }
+  assert.equal(extractAgentMeta('anthropic', anthropicLoop, null).turnPrompt, 'fix the login bug')
+
+  // A new user message starts a new turn prompt
+  const anthropicNextTurn = {
+    messages: [
+      ...anthropicLoop.messages,
+      { role: 'assistant', content: 'done' },
+      { role: 'user', content: [{ type: 'text', text: 'now add tests' }] },
+    ],
+  }
+  assert.equal(extractAgentMeta('anthropic', anthropicNextTurn, null).turnPrompt, 'now add tests')
+
+  // OpenAI: tool results are role "tool", so the last user message wins
+  const openaiLoop = {
+    messages: [
+      { role: 'user', content: 'summarize this repo' },
+      { role: 'assistant', tool_calls: [{ function: { name: 'ls' } }] },
+      { role: 'tool', content: 'src/ test/' },
+    ],
+  }
+  assert.equal(extractAgentMeta('openai', openaiLoop, null).turnPrompt, 'summarize this repo')
+
+  // Gemini: functionResponse parts carry no text and are skipped
+  const geminiLoop = {
+    contents: [
+      { role: 'user', parts: [{ text: 'translate the docs' }] },
+      { role: 'model', parts: [{ functionCall: { name: 'fetch', args: {} } }] },
+      { role: 'user', parts: [{ functionResponse: { name: 'fetch', response: {} } }] },
+    ],
+  }
+  assert.equal(extractAgentMeta('gemini', geminiLoop, null).turnPrompt, 'translate the docs')
+
+  // Absence rule: no genuine user message → null
+  assert.equal(extractAgentMeta('anthropic', { messages: [] }, null).turnPrompt, null)
+})
+
 test('header overrides: turn id stored verbatim, null without the header', () => {
   const overrides = overridesFromHeaders({ 'x-llm-proxy-turn-id': 'turn-7' })
   assert.equal(overrides.turnId, 'turn-7')

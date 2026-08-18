@@ -68,3 +68,51 @@ test('anthropic stream: message_delta usage merge keeps nested details', () => {
   assert.ok(responseBody)
   assert.equal(responseBody.stop_reason, 'end_turn')
 })
+
+test('openai responses stream: terminal event supplies usage, model, and native body', () => {
+  const acc = new StreamUsageAccumulator(providers.openai)
+
+  acc.push('data: ' + JSON.stringify({ type: 'response.created', response: { id: 'resp_1' } }) + '\n')
+  acc.push('data: ' + JSON.stringify({ type: 'response.output_text.delta', delta: 'Hel' }) + '\n')
+  acc.push('data: ' + JSON.stringify({ type: 'response.output_text.delta', delta: 'lo' }) + '\n')
+  acc.push('data: ' + JSON.stringify({
+    type: 'response.completed',
+    response: {
+      id: 'resp_1',
+      model: 'gpt-5',
+      status: 'completed',
+      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hello' }] }],
+      usage: {
+        input_tokens: 120,
+        output_tokens: 8,
+        input_tokens_details: { cached_tokens: 100 },
+        output_tokens_details: { reasoning_tokens: 3 },
+      },
+    },
+  }) + '\n')
+  acc.push('data: [DONE]\n')
+
+  const { responseBody, usage, model } = acc.result()
+  assert.equal(model, 'gpt-5')
+  assert.ok(usage)
+  assert.equal(usage.input_tokens, 120)
+  assert.ok(responseBody)
+  assert.equal(responseBody.status, 'completed')
+
+  // Responses-shape usage feeds the token extractor, including cache reads
+  const tokens = providers.openai.extractTokenUsage(usage)
+  assert.equal(tokens.inputTokens, 120)
+  assert.equal(tokens.outputTokens, 8)
+  assert.equal(tokens.cacheReadTokens, 100)
+})
+
+test('openai prepareStreamBody: include_usage only for chat completions', () => {
+  const body = { model: 'gpt-5', stream: true }
+  const chat = providers.openai.prepareStreamBody!(body, '/v1/chat/completions') as Record<string, unknown>
+  assert.deepEqual(chat.stream_options, { include_usage: true })
+
+  // The Responses API rejects stream_options — body must pass through untouched
+  const responses = providers.openai.prepareStreamBody!(body, '/v1/responses') as Record<string, unknown>
+  assert.equal(responses.stream_options, undefined)
+  assert.equal(responses, body)
+})

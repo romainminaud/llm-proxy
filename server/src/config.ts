@@ -10,6 +10,7 @@ export type Config = {
   openaiBaseUrl: string;
   anthropicBaseUrl: string;
   geminiBaseUrl: string;
+  openrouterBaseUrl: string;
   nodeEnv: 'development' | 'production' | 'test';
   trustProxy: boolean;
   corsOrigin: string;
@@ -26,6 +27,7 @@ const DEFAULT_CONFIG: Config = {
   openaiBaseUrl: 'https://api.openai.com',
   anthropicBaseUrl: 'https://api.anthropic.com',
   geminiBaseUrl: 'https://generativelanguage.googleapis.com',
+  openrouterBaseUrl: 'https://openrouter.ai/api',
   nodeEnv: 'development',
   trustProxy: false,
   corsOrigin: '*',
@@ -83,12 +85,14 @@ export function loadConfig(): Config {
   const openaiBaseUrl = process.env.OPENAI_API_BASE_URL || fileConfig.openaiBaseUrl || DEFAULT_CONFIG.openaiBaseUrl;
   const anthropicBaseUrl = process.env.ANTHROPIC_API_BASE_URL || fileConfig.anthropicBaseUrl || DEFAULT_CONFIG.anthropicBaseUrl;
   const geminiBaseUrl = process.env.GEMINI_API_BASE_URL || fileConfig.geminiBaseUrl || DEFAULT_CONFIG.geminiBaseUrl;
+  const openrouterBaseUrl = process.env.OPENROUTER_API_BASE_URL || fileConfig.openrouterBaseUrl || DEFAULT_CONFIG.openrouterBaseUrl;
 
   // Validate configuration
   validatePort(port);
   validateUrl(openaiBaseUrl, 'OPENAI_API_BASE_URL');
   validateUrl(anthropicBaseUrl, 'ANTHROPIC_API_BASE_URL');
   validateUrl(geminiBaseUrl, 'GEMINI_API_BASE_URL');
+  validateUrl(openrouterBaseUrl, 'OPENROUTER_API_BASE_URL');
 
   const dataDir = process.env.LLM_PROXY_DATA_DIR || fileConfig.dataDir || DEFAULT_CONFIG.dataDir;
 
@@ -99,6 +103,7 @@ export function loadConfig(): Config {
     openaiBaseUrl,
     anthropicBaseUrl,
     geminiBaseUrl,
+    openrouterBaseUrl,
     nodeEnv: getNodeEnv(),
     trustProxy: process.env.TRUST_PROXY === 'true' || fileConfig.trustProxy || DEFAULT_CONFIG.trustProxy,
     corsOrigin: process.env.CORS_ORIGIN || fileConfig.corsOrigin || DEFAULT_CONFIG.corsOrigin,

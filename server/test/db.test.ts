@@ -286,6 +286,7 @@ test('getSessionDetail rolls up turn-tagged requests', async () => {
     id: 't-r1',
     timestamp: '2026-08-17T09:00:00.000Z',
     turnId: 'turn-1',
+    turnPrompt: 'fix the login bug',
     outputTokens: 10,
     totalCost: 0.01,
     toolCallsCount: 1,
@@ -322,6 +323,16 @@ test('getSessionDetail rolls up turn-tagged requests', async () => {
   assert.equal(detail.turns.length, 2)
   const [turn1, turn2] = detail.turns
   assert.equal(turn1.turn_id, 'turn-1')
+  // Ordinal within the session, by first-request time
+  assert.equal(turn1.turn_number, 1)
+  assert.equal(turn2.turn_number, 2)
+  // Prompt comes from the turn's first request
+  assert.equal(turn1.turn_prompt, 'fix the login bug')
+  // Per-model cost split within the turn
+  assert.equal(turn1.by_model.length, 1)
+  assert.equal(turn1.by_model[0].model, 'claude-opus-4-7')
+  assert.equal(turn1.by_model[0].count, 2)
+  assert.ok(Math.abs(turn1.by_model[0].total_cost - 0.03) < 1e-9)
   assert.equal(turn1.request_count, 2)
   assert.equal(turn1.error_count, 1)
   assert.equal(turn1.output_tokens, 30)
@@ -347,8 +358,17 @@ test('getSessionDetail rolls up turn-tagged requests', async () => {
   assert.equal(allTurns[1].request_count, 2)
 
   // Turn drill-down: rollup + only that turn's requests, seq scoped to the turn
+  // getTurns ranks per session even though the list is newest-first
+  assert.equal(allTurns[0].turn_number, 2)
+  assert.equal(allTurns[1].turn_number, 1)
+
+  assert.equal(allTurns[1].by_model[0]?.count, 2)
+
   const turnDetail = db.getTurnDetail('s:sess-1', 'turn-1')
   assert.ok(turnDetail)
+  assert.equal(turnDetail.turn.by_model[0]?.model, 'claude-opus-4-7')
+  assert.equal(turnDetail.turn.turn_number, 1)
+  assert.equal(db.getTurnDetail('s:sess-1', 'turn-2')?.turn.turn_number, 2)
   assert.equal(turnDetail.turn.request_count, 2)
   assert.equal(turnDetail.requests.length, 2)
   assert.equal(turnDetail.requests[0].seq, 1)

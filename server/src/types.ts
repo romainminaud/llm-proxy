@@ -29,6 +29,7 @@ export type RequestRecord = {
   // Agentic metadata (null = provider couldn't say, never coerced to 0)
   session_id?: string | null          // "s:<id>" explicit, "h:<hash>" heuristic
   turn_id?: string | null             // verbatim x-llm-proxy-turn-id header
+  turn_prompt?: string | null         // snippet of the last genuine user message
   agent_entrypoint?: string | null    // e.g. "sdk-cli" (Claude Code)
   agent_version?: string | null
   tools_defined_count?: number | null
@@ -69,6 +70,7 @@ export type SaveRequestInput = {
   // Agentic metadata
   sessionId?: string | null
   turnId?: string | null
+  turnPrompt?: string | null
   agentEntrypoint?: string | null
   agentVersion?: string | null
   toolsDefinedCount?: number | null
@@ -123,10 +125,21 @@ export type SessionRequest = Omit<RequestRecord, 'request_body' | 'response_body
   context_growth: number | null
 }
 
+// Cost/call split by model within one turn (e.g. agent model vs title-gen model)
+export type TurnModelStat = {
+  model: string
+  count: number
+  total_cost: number
+}
+
 // Per-turn rollup inside one session, grouped by the client-supplied
 // x-llm-proxy-turn-id header. Requests without a turn_id are not rolled up.
 export type TurnSummary = {
   turn_id: string
+  // 1-based ordinal within the session, by first-request time
+  turn_number: number
+  // Prompt that started the turn: the first request's last genuine user message
+  turn_prompt: string | null
   request_count: number
   error_count: number
   started_at: string
@@ -141,6 +154,7 @@ export type TurnSummary = {
   total_cost: number
   tool_calls: number
   last_stop_reason: string | null
+  by_model: TurnModelStat[]   // ordered by cost, highest first
 }
 
 // One row in the cross-session turns list (/api/turns)

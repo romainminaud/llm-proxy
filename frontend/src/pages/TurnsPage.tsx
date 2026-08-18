@@ -3,9 +3,12 @@ import { Link, useParams } from 'react-router-dom'
 import ErrorBoundary from '../components/ErrorBoundary'
 import RequestDetail from '../components/RequestDetail'
 import RequestTimelineTable from '../components/RequestTimelineTable'
+import TurnsTable from '../components/TurnsTable'
+import { Badge } from '@/components/ui/badge'
 import type { RequestRecord, TurnDetail, TurnListItem } from '../types'
 import { shortSessionId } from '../utils/toolCalls'
-import { formatDuration, formatTokens, stripModelSuffix } from '../utils/format'
+import { formatDuration, formatTokens, ordinal, stripModelSuffix } from '../utils/format'
+import { PageSubtitle, PageTitle, StatCard, StatsRow } from './SessionsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 const AUTO_REFRESH_MS = 10000
@@ -27,108 +30,19 @@ function TurnsList() {
   }, [load])
 
   return (
-    <div className="logs-page">
-      <h1 className="page-title">Turns</h1>
-      <p className="page-subtitle muted">
+    <div>
+      <PageTitle>Turns</PageTitle>
+      <PageSubtitle>
         Requests grouped into turns via the <code>x-llm-proxy-turn-id</code> header, across all sessions.
-      </p>
-      <div className="table-wrap">
-        <table className="requests-table">
-          <thead>
-            <tr>
-              <th>Turn</th>
-              <th>Session</th>
-              <th>Agent</th>
-              <th>Started</th>
-              <th>Wall / API</th>
-              <th>Reqs</th>
-              <th>Models</th>
-              <th>Input</th>
-              <th>Cache Read</th>
-              <th>Cache Write</th>
-              <th>Output</th>
-              <th>Reasoning</th>
-              <th>Tools</th>
-              <th>Stop</th>
-              <th>Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {turns.map(turn => (
-              <tr
-                key={`${turn.session_id}:${turn.turn_id}`}
-                className={turn.error_count > 0 ? 'error-row' : ''}
-              >
-                <td>
-                  {turn.session_id ? (
-                    <Link
-                      to={`/turns/${encodeURIComponent(turn.session_id)}/${encodeURIComponent(turn.turn_id)}`}
-                      className="session-link turn-id"
-                      title={turn.turn_id}
-                    >
-                      {turn.turn_id}
-                    </Link>
-                  ) : (
-                    <span className="turn-id" title={turn.turn_id}>{turn.turn_id}</span>
-                  )}
-                </td>
-                <td>
-                  {turn.session_id ? (
-                    <Link
-                      to={`/sessions/${encodeURIComponent(turn.session_id)}`}
-                      className="session-link"
-                      title={turn.session_id}
-                    >
-                      {shortSessionId(turn.session_id)}
-                    </Link>
-                  ) : (
-                    <span className="muted">-</span>
-                  )}
-                </td>
-                <td>
-                  {turn.agent_entrypoint
-                    ? <span className="model-badge">{turn.agent_entrypoint}</span>
-                    : <span className="muted">-</span>}
-                </td>
-                <td>{new Date(turn.started_at).toLocaleString()}</td>
-                <td className="duration">
-                  {formatDuration(turn.wall_ms)} / {formatDuration(turn.api_ms)}
-                </td>
-                <td className="tokens">
-                  {turn.request_count}
-                  {turn.error_count > 0 && (
-                    <span className="muted" title="failed requests"> ({turn.error_count}✗)</span>
-                  )}
-                </td>
-                <td>
-                  {turn.models.map(model => (
-                    <span key={model} className="model-badge">{stripModelSuffix(model)}</span>
-                  ))}
-                </td>
-                <td className="tokens">{formatTokens(turn.input_tokens)}</td>
-                <td className="tokens">{formatTokens(turn.cache_read_tokens)}</td>
-                <td className="tokens">{formatTokens(turn.cache_write_tokens)}</td>
-                <td className="tokens">{formatTokens(turn.output_tokens)}</td>
-                <td className="tokens">{formatTokens(turn.reasoning_tokens)}</td>
-                <td className="tokens">{turn.tool_calls}</td>
-                <td>
-                  {turn.last_stop_reason
-                    ? <span className="stop-reason-badge">{turn.last_stop_reason}</span>
-                    : <span className="muted">-</span>}
-                </td>
-                <td className="cost">${turn.total_cost.toFixed(4)}</td>
-              </tr>
-            ))}
-            {loaded && turns.length === 0 && (
-              <tr>
-                <td colSpan={15} className="muted">
-                  No turns yet — send <code>x-llm-proxy-turn-id</code> headers with your requests.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      </PageSubtitle>
+      <TurnsTable
+        turns={turns}
+        showSession
+        loaded={loaded}
+        emptyMessage={
+          <>No turns yet — send <code>x-llm-proxy-turn-id</code> headers with your requests.</>
+        }
+      />
     </div>
   )
 }
@@ -163,8 +77,10 @@ function TurnDetailView({ sessionId, turnId }: { sessionId: string; turnId: stri
     if (res.ok) setSelectedRequest(await res.json())
   }
 
-  if (notFound) return <div className="logs-page"><div className="error-banner">Turn not found</div></div>
-  if (!detail) return <div className="logs-page"><div className="muted">Loading…</div></div>
+  if (notFound) {
+    return <div className="rounded-md border border-danger/25 bg-danger/5 px-3 py-2 text-[13px] text-danger">Turn not found</div>
+  }
+  if (!detail) return <div className="text-ink-muted">Loading…</div>
 
   const { turn, requests, tool_usage } = detail
   const toolEntries = Object.entries(tool_usage).sort((a, b) => b[1] - a[1])
@@ -172,76 +88,72 @@ function TurnDetailView({ sessionId, turnId }: { sessionId: string; turnId: stri
   const cacheHitRatio = contextTokens > 0 ? turn.cache_read_tokens / contextTokens : null
 
   return (
-    <div className="logs-page">
-      <h1 className="page-title">
-        <Link to="/turns" className="session-link">Turns</Link>
-        {' / '}
+    <div>
+      <PageTitle>
+        <Link to="/turns" className="text-accent hover:underline">Turns</Link>
+        <span className="text-ink-muted"> / </span>
         <Link
           to={`/sessions/${encodeURIComponent(turn.session_id)}`}
-          className="session-link"
+          className="font-mono text-lg text-accent hover:underline"
           title={turn.session_id}
         >
           {shortSessionId(turn.session_id)}
         </Link>
-        {' / '}
-        <span className="turn-id" title={turn.turn_id}>{turn.turn_id}</span>
-      </h1>
+        <span className="text-ink-muted"> / </span>
+        <span className="font-mono text-lg" title={turn.turn_id}>{turn.turn_id}</span>
+        <span className="ml-2 align-middle font-sans text-[13px] font-normal text-ink-tertiary">
+          {ordinal(turn.turn_number)} turn of the session
+        </span>
+      </PageTitle>
+      {turn.turn_prompt && (
+        <p className="mb-5 max-w-3xl text-[13px] leading-5 text-ink-secondary">
+          {turn.turn_prompt}
+        </p>
+      )}
+      {!turn.turn_prompt && <div className="mb-5" />}
 
-      <div className="stats-row">
-        <div className="stat-card">
-          <div className="stat-label">Requests</div>
-          <div className="stat-value">
-            {turn.request_count}
-            {turn.error_count > 0 && <span className="muted"> ({turn.error_count}✗)</span>}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Wall / API time</div>
-          <div className="stat-value">
-            {formatDuration(turn.wall_ms)} / {formatDuration(turn.api_ms)}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Cache Read / Write</div>
-          <div className="stat-value">
-            {formatTokens(turn.cache_read_tokens)} / {formatTokens(turn.cache_write_tokens)}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Cache Hit</div>
-          <div className="stat-value">
-            {cacheHitRatio === null ? '—' : `${Math.round(cacheHitRatio * 100)}%`}
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Output</div>
-          <div className="stat-value">{formatTokens(turn.output_tokens)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Tool Calls</div>
-          <div className="stat-value">{turn.tool_calls}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Cost</div>
-          <div className="stat-value cost">${turn.total_cost.toFixed(4)}</div>
-        </div>
-      </div>
+      <StatsRow>
+        <StatCard
+          label="Requests"
+          value={
+            <>
+              {turn.request_count}
+              {turn.error_count > 0 && <span className="text-danger"> ({turn.error_count}✗)</span>}
+            </>
+          }
+        />
+        <StatCard
+          label="Wall / API time"
+          value={`${formatDuration(turn.wall_ms)} / ${formatDuration(turn.api_ms)}`}
+        />
+        <StatCard
+          label="Cache read / write"
+          value={`${formatTokens(turn.cache_read_tokens)} / ${formatTokens(turn.cache_write_tokens)}`}
+        />
+        <StatCard
+          label="Cache hit"
+          value={cacheHitRatio === null ? '—' : `${Math.round(cacheHitRatio * 100)}%`}
+        />
+        <StatCard label="Output" value={formatTokens(turn.output_tokens)} />
+        <StatCard label="Tool calls" value={turn.tool_calls} />
+        <StatCard label="Cost" value={`$${turn.total_cost.toFixed(4)}`} />
+      </StatsRow>
 
       {(turn.agent_entrypoint || turn.models.length > 0) && (
-        <p className="muted">
+        <p className="mb-4 text-[13px] text-ink-tertiary">
           {turn.agent_entrypoint && (
-            <>Agent: <span className="model-badge">{turn.agent_entrypoint}</span>{' · '}</>
+            <>Agent: <Badge>{turn.agent_entrypoint}</Badge>{' · '}</>
           )}
           Models: {turn.models.map(stripModelSuffix).join(', ')}
         </p>
       )}
 
       {toolEntries.length > 0 && (
-        <div className="tool-call-list session-tools">
+        <div className="mb-5 flex flex-wrap gap-1">
           {toolEntries.map(([name, count]) => (
-            <span key={name} className="tool-call-badge">
+            <Badge variant="outline" key={name}>
               {name}{count > 1 ? ` ×${count}` : ''}
-            </span>
+            </Badge>
           ))}
         </div>
       )}

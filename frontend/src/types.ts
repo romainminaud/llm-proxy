@@ -108,6 +108,10 @@ export type SessionRequest = Omit<RequestRecord, 'request_body' | 'response_body
 // Per-turn rollup within a session (grouped by the x-llm-proxy-turn-id header)
 export type TurnSummary = {
   turn_id: string
+  // 1-based ordinal within the session, by first-request time
+  turn_number: number
+  // Prompt that started the turn: the first request's last genuine user message
+  turn_prompt: string | null
   request_count: number
   error_count: number
   started_at: string
@@ -122,6 +126,8 @@ export type TurnSummary = {
   total_cost: number
   tool_calls: number
   last_stop_reason: string | null
+  // Cost/call split by model within the turn, highest cost first
+  by_model: Array<{ model: string; count: number; total_cost: number }>
 }
 
 // One row in the cross-session turns list (/api/turns)

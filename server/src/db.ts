@@ -11,6 +11,7 @@ import type {
   Stats,
   TurnDetail,
   TurnListItem,
+  TurnModelStat,
   TurnSummary,
 } from './types.js';
 
@@ -45,6 +46,7 @@ type RequestRow = {
   replay_of: string | null;
   session_id: string | null;
   turn_id: string | null;
+  turn_prompt: string | null;
   agent_entrypoint: string | null;
   agent_version: string | null;
   tools_defined_count: number | null;
@@ -95,6 +97,7 @@ function rowToRecord(row: RequestRow): RequestRecord {
     replay_of: row.replay_of,
     session_id: row.session_id,
     turn_id: row.turn_id,
+    turn_prompt: row.turn_prompt,
     agent_entrypoint: row.agent_entrypoint,
     agent_version: row.agent_version,
     tools_defined_count: row.tools_defined_count,
@@ -134,7 +137,7 @@ export function saveRequest(data: SaveRequestInput): void {
       output_tokens, cached_tokens, cache_write_tokens,
       input_cost, cached_cost, cache_write_cost, output_cost, total_cost,
       error, replay_of,
-      session_id, turn_id, agent_entrypoint, agent_version,
+      session_id, turn_id, turn_prompt, agent_entrypoint, agent_version,
       tools_defined_count, tool_calls_count, tool_names,
       reasoning_tokens, stop_reason, message_count,
       request_bytes, response_bytes
@@ -145,7 +148,7 @@ export function saveRequest(data: SaveRequestInput): void {
       ?, ?, ?,
       ?, ?, ?, ?, ?,
       ?, ?,
-      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?,
       ?, ?, ?,
       ?, ?, ?,
       ?, ?
@@ -179,6 +182,7 @@ export function saveRequest(data: SaveRequestInput): void {
     data.replayOf ?? null,
     data.sessionId ?? null,
     data.turnId ?? null,
+    data.turnPrompt ?? null,
     data.agentEntrypoint ?? null,
     data.agentVersion ?? null,
     data.toolsDefinedCount ?? null,
@@ -461,6 +465,12 @@ export function getSessionDetail(sessionId: string): SessionDetail | null {
   const turnRows = db.prepare(`
     SELECT
       turn_id,
+      ROW_NUMBER() OVER (ORDER BY MIN(timestamp), turn_id) AS turn_number,
+      (
+        SELECT r3.turn_prompt FROM requests r3
+        WHERE r3.session_id IS requests.session_id AND r3.turn_id = requests.turn_id
+        ORDER BY r3.timestamp ASC, r3.id ASC LIMIT 1
+      ) AS turn_prompt,
       COUNT(*) AS request_count,
       SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS error_count,
       MIN(timestamp) AS started_at,
@@ -482,11 +492,16 @@ export function getSessionDetail(sessionId: string): SessionDetail | null {
     WHERE session_id = ? AND turn_id IS NOT NULL
     GROUP BY turn_id
     ORDER BY started_at, turn_id
-  `).all(sessionId) as (Omit<TurnSummary, 'wall_ms'>)[];
+  `).all(sessionId) as (Omit<TurnSummary, 'wall_ms' | 'by_model'>)[];
 
+  const turnModels = turnModelStats(' AND session_id = ?', [sessionId]);
   const turns: TurnSummary[] = turnRows.map((row) => {
     const wallMs = Date.parse(row.ended_at) - Date.parse(row.started_at);
-    return { ...row, wall_ms: Number.isFinite(wallMs) ? wallMs : 0 };
+    return {
+      ...row,
+      wall_ms: Number.isFinite(wallMs) ? wallMs : 0,
+      by_model: turnModels.get(`${sessionId}\u0000${row.turn_id}`) ?? [],
+    };
   });
 
   const byModel = db.prepare(`
@@ -513,12 +528,42 @@ export function getSessionDetail(sessionId: string): SessionDetail | null {
 
 // Cross-session turns list: one row per (session, turn), newest first.
 // Turns are only ever header-tagged, so untagged traffic never appears here.
-type TurnListRow = Omit<TurnListItem, 'wall_ms' | 'models'> & { models: string | null };
+type TurnListRow = Omit<TurnListItem, 'wall_ms' | 'models' | 'by_model'> & { models: string | null };
+
+// Per-(session, turn) cost split by model, keyed "session\u0000turn".
+// One grouped query instead of a correlated lookup per turn row.
+function turnModelStats(extraClause: string, params: string[]): Map<string, TurnModelStat[]> {
+  const db = getDatabase();
+  const rows = db.prepare(`
+    SELECT session_id, turn_id, model,
+      COUNT(*) AS count,
+      SUM(COALESCE(total_cost, 0)) AS total_cost
+    FROM requests
+    WHERE turn_id IS NOT NULL AND model IS NOT NULL${extraClause}
+    GROUP BY session_id, turn_id, model
+    ORDER BY total_cost DESC
+  `).all(...params) as (TurnModelStat & { session_id: string | null; turn_id: string })[];
+
+  const map = new Map<string, TurnModelStat[]>();
+  for (const row of rows) {
+    const key = `${row.session_id ?? ''}\u0000${row.turn_id}`;
+    const list = map.get(key) ?? [];
+    list.push({ model: row.model, count: row.count, total_cost: row.total_cost });
+    map.set(key, list);
+  }
+  return map;
+}
 
 const TURN_LIST_SELECT = `
   SELECT
     session_id,
     turn_id,
+    ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY MIN(timestamp), turn_id) AS turn_number,
+    (
+      SELECT r3.turn_prompt FROM requests r3
+      WHERE r3.session_id IS requests.session_id AND r3.turn_id = requests.turn_id
+      ORDER BY r3.timestamp ASC, r3.id ASC LIMIT 1
+    ) AS turn_prompt,
     COUNT(*) AS request_count,
     SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS error_count,
     MIN(timestamp) AS started_at,
@@ -541,7 +586,7 @@ const TURN_LIST_SELECT = `
   FROM requests
 `;
 
-function turnRowToItem(row: TurnListRow): TurnListItem {
+function turnRowToItem(row: TurnListRow): Omit<TurnListItem, 'by_model'> {
   const wallMs = Date.parse(row.ended_at) - Date.parse(row.started_at);
   return {
     ...row,
@@ -564,7 +609,11 @@ export function getTurns({
     LIMIT ? OFFSET ?
   `).all(limit, offset) as TurnListRow[];
 
-  return rows.map(turnRowToItem);
+  const models = turnModelStats('', []);
+  return rows.map((row) => ({
+    ...turnRowToItem(row),
+    by_model: models.get(`${row.session_id ?? ''}\u0000${row.turn_id}`) ?? [],
+  }));
 }
 
 export function getTurnDetail(sessionId: string, turnId: string): TurnDetail | null {
@@ -578,11 +627,27 @@ export function getTurnDetail(sessionId: string, turnId: string): TurnDetail | n
 
   if (!rollup) return null;
 
+  // The shared SELECT's ROW_NUMBER ranks within the filtered set (always 1
+  // here), so recompute the ordinal against every turn in the session.
+  const numberRow = db.prepare(`
+    SELECT COUNT(*) AS n FROM (
+      SELECT turn_id AS tid, MIN(timestamp) AS started FROM requests
+      WHERE session_id = ? AND turn_id IS NOT NULL
+      GROUP BY turn_id
+    ) WHERE started < ? OR (started = ? AND tid <= ?)
+  `).get(sessionId, rollup.started_at, rollup.started_at, turnId) as { n: number };
+
   const rows = queryTimeline(['session_id = ?', 'turn_id = ?'], [sessionId, turnId]);
   const { requests, toolUsage } = buildTimeline(rows);
 
+  const models = turnModelStats(' AND session_id = ? AND turn_id = ?', [sessionId, turnId]);
+
   return {
-    turn: turnRowToItem(rollup),
+    turn: {
+      ...turnRowToItem(rollup),
+      turn_number: numberRow.n,
+      by_model: models.get(`${sessionId}\u0000${turnId}`) ?? [],
+    },
     requests,
     tool_usage: toolUsage,
   };

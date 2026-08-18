@@ -1,3 +1,6 @@
+import { RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input, Select } from '@/components/ui/input'
 import type { Stats } from '../types'
 
 type ControlsProps = {
@@ -49,43 +52,40 @@ function Controls({
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize))
 
   return (
-    <div className="controls">
-      <button onClick={onRefresh}>Refresh</button>
-      <select value={modelFilter} onChange={e => onModelFilterChange(e.target.value)}>
-        <option value="">All Models</option>
+    <div className="mb-5 flex flex-wrap items-center gap-2">
+      <Button onClick={onRefresh}>
+        <RefreshCw />
+        Refresh
+      </Button>
+      <Select value={modelFilter} onChange={e => onModelFilterChange(e.target.value)}>
+        <option value="">All models</option>
         {stats?.byModel.map(model => (
           <option key={model.model} value={model.model}>
             {model.model} ({model.count})
           </option>
         ))}
-      </select>
-      <select value={providerFilter} onChange={e => onProviderFilterChange(e.target.value)}>
-        <option value="">All Providers</option>
+      </Select>
+      <Select value={providerFilter} onChange={e => onProviderFilterChange(e.target.value)}>
+        <option value="">All providers</option>
         <option value="openai">openai</option>
         <option value="anthropic">anthropic</option>
         <option value="gemini">gemini</option>
-      </select>
-      <button className="danger" onClick={onClearAll}>Clear All</button>
-      <button
-        className="secondary"
-        onClick={onExportSelected}
-        disabled={selectedCount === 0}
-      >
+        <option value="openrouter">openrouter</option>
+      </Select>
+      <Button variant="destructive" onClick={onClearAll}>Clear all</Button>
+      <Button variant="ghost" onClick={onExportSelected} disabled={selectedCount === 0}>
         Export CSV ({selectedCount})
-      </button>
-      <button
-        className="secondary"
-        onClick={onExportSelectedStats}
-        disabled={selectedCount === 0}
-      >
-        Export Stats ({selectedCount})
-      </button>
-      <label className="control-number">
-        <span>Multiplier</span>
-        <input
+      </Button>
+      <Button variant="ghost" onClick={onExportSelectedStats} disabled={selectedCount === 0}>
+        Export stats ({selectedCount})
+      </Button>
+      <label className="flex items-center gap-1.5 text-[13px] text-ink-secondary">
+        <span className="microlabel">Multiplier</span>
+        <Input
           type="number"
           min="0"
           step="0.01"
+          className="w-[72px] text-right font-mono tabular-nums"
           value={Number.isFinite(priceMultiplier) ? priceMultiplier : 1}
           onChange={e => {
             const next = Number(e.target.value)
@@ -93,34 +93,27 @@ function Controls({
           }}
         />
       </label>
-      <label className="control-toggle">
+      <label className="flex cursor-pointer items-center gap-1.5 text-[13px] text-ink-secondary">
         <input
           type="checkbox"
+          className="accent-[var(--accent)]"
           checked={autoRefreshEnabled}
           onChange={e => onAutoRefreshChange(e.target.checked)}
         />
         Auto refresh
-        <span className="control-hint">{refreshSeconds}s</span>
+        <span className="microlabel">{refreshSeconds}s</span>
       </label>
-      <button className="secondary" onClick={onSettings}>Settings</button>
-      <div className="pager">
-        <button
-          className="secondary"
-          disabled={page === 0}
-          onClick={() => onPageChange(page - 1)}
-        >
+      <Button variant="ghost" onClick={onSettings}>Settings</Button>
+      <div className="ml-auto flex items-center gap-1.5">
+        <Button size="sm" disabled={page === 0} onClick={() => onPageChange(page - 1)}>
           ‹ Prev
-        </button>
-        <span className="pager-info">
+        </Button>
+        <span className="px-1 font-mono text-xs tabular-nums text-ink-tertiary">
           {page + 1} / {pageCount}
         </span>
-        <button
-          className="secondary"
-          disabled={page + 1 >= pageCount}
-          onClick={() => onPageChange(page + 1)}
-        >
+        <Button size="sm" disabled={page + 1 >= pageCount} onClick={() => onPageChange(page + 1)}>
           Next ›
-        </button>
+        </Button>
       </div>
     </div>
   )

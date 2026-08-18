@@ -77,6 +77,12 @@ const MIGRATIONS = [
 
   CREATE INDEX IF NOT EXISTS idx_requests_session_turn ON requests(session_id, turn_id);
   `,
+
+  // Migration 5: last genuine user message snippet — labels a turn with the
+  // prompt that started it. Body-derived, so the backfill populates old rows.
+  `
+  ALTER TABLE requests ADD COLUMN turn_prompt TEXT;
+  `,
 ];
 
 function getCurrentVersion(database: Database.Database): number {
@@ -153,9 +159,9 @@ export function initDatabase(dbPath: string): Database.Database {
   // Run migrations
   const applied = runMigrations(db);
 
-  // Migration 3 added extracted agentic columns; populate them from the
-  // verbatim stored bodies exactly once, right after the columns appear.
-  if (applied.includes(3)) {
+  // Migrations 3 and 5 added extracted agentic columns; populate them from
+  // the verbatim stored bodies exactly once, right after the columns appear.
+  if (applied.includes(3) || applied.includes(5)) {
     backfillAgentMeta(db);
   }
 
