@@ -1,7 +1,7 @@
 import test, { beforeEach, after } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import express from 'express'
@@ -39,6 +39,24 @@ process.env.PORT = '0'
 
 mockOpenAI.post('/v1/chat/completions', (req, res) => {
   const model = req.body?.model || 'gpt-4o-mini'
+
+  if (req.body?.stream === true) {
+    res.setHeader('Content-Type', 'text/event-stream')
+    const send = (chunk: unknown) => res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+    send({ id: 'chatcmpl-stream', model, choices: [{ index: 0, delta: { role: 'assistant', content: 'Hello ' } }] })
+    send({ id: 'chatcmpl-stream', model, choices: [{ index: 0, delta: { content: 'from stream!' } }] })
+    send({ id: 'chatcmpl-stream', model, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })
+    send({
+      id: 'chatcmpl-stream',
+      model,
+      choices: [],
+      usage: { prompt_tokens: 100, completion_tokens: 50, prompt_tokens_details: { cached_tokens: 20 } },
+    })
+    res.write('data: [DONE]\n\n')
+    res.end()
+    return
+  }
+
   res.json({
     id: 'chatcmpl-mock',
     object: 'chat.completion',
@@ -465,4 +483,46 @@ test('Proxy: vendor-agnostic session/agent headers are stored and not forwarded 
   assert.equal(saved.session_id, 's:my-task-42')
   assert.equal(saved.agent_entrypoint, 'my-agent')
   assert.equal(saved.agent_version, '0.9.0')
+})
+
+test('Proxy: a streamed request saves the reassembled response to DB and JSON', async () => {
+  clearAll()
+  const res = await fetch(`${base}/v1/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-key' },
+    body: JSON.stringify({ model: 'gpt-4o-mini', stream: true, messages: [{ role: 'user', content: 'hi' }] }),
+  })
+  // The client still gets the raw SSE stream, untouched.
+  const raw = await res.text()
+  assert.equal(res.status, 200)
+  assert.match(raw, /data: \[DONE\]/)
+
+  await wait()
+  const saved = getRequest(getRequests({})[0].id)
+  assert.ok(saved)
+  // Usage came from the trailing SSE chunk, not from a JSON response body.
+  assert.equal(saved.output_tokens, 50)
+
+  const mirrored = JSON.parse(readFileSync(join(tempDir, 'requests', `${saved.id}.json`), 'utf-8'))
+  assert.equal(mirrored.id, saved.id)
+  // Deltas are reassembled into the native non-streamed shape.
+  assert.equal(mirrored.response_body.choices[0].message.content, 'Hello from stream!')
+  assert.equal(mirrored.response_body.choices[0].finish_reason, 'stop')
+  assert.equal(mirrored.response_body.usage.completion_tokens, 50)
+})
+
+test('Proxy: a proxied request is also written to the request JSON dir', async () => {
+  const { status } = await request('/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-key' },
+    body: { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] },
+  })
+  assert.equal(status, 200)
+
+  await wait()
+  const saved = getRequests({})[0]
+  const mirrored = JSON.parse(readFileSync(join(tempDir, 'requests', `${saved.id}.json`), 'utf-8'))
+  assert.equal(mirrored.id, saved.id)
+  assert.equal(mirrored.model, 'gpt-4o-mini')
+  assert.ok(mirrored.response_body)
 })

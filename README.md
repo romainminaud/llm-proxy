@@ -52,6 +52,8 @@ npm run dev
 | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `LLM_PROXY_DATA_DIR` | `./data` | Data directory for database |
 | `LLM_PROXY_DATABASE_PATH` | `./data/llm-proxy.db` | SQLite database path |
+| `LLM_PROXY_SAVE_REQUEST_JSON` | `true` | Also write each request as a JSON file (set `false` for DB only) |
+| `LLM_PROXY_REQUEST_JSON_DIR` | `./data/requests` | Directory for the per-request JSON files |
 | `OPENAI_API_BASE_URL` | `https://api.openai.com` | OpenAI API base URL |
 | `ANTHROPIC_API_BASE_URL` | `https://api.anthropic.com` | Anthropic API base URL |
 | `GEMINI_API_BASE_URL` | `https://generativelanguage.googleapis.com` | Gemini API base URL |
@@ -69,6 +71,8 @@ Create `llm-proxy.config.json` in the project root:
   "port": 8090,
   "dataDir": "./data",
   "databasePath": "./data/llm-proxy.db",
+  "saveRequestJson": true,
+  "requestJsonDir": "./data/requests",
   "openaiBaseUrl": "https://api.openai.com",
   "anthropicBaseUrl": "https://api.anthropic.com",
   "geminiBaseUrl": "https://generativelanguage.googleapis.com",
@@ -81,6 +85,12 @@ Create `llm-proxy.config.json` in the project root:
   }
 }
 ```
+
+### Model Pricing
+
+All model pricing (per 1M tokens, USD) lives in a single file: `server/src/model-pricing.json`. To update prices or add a model, edit that file — no code changes needed. The `models` map holds per-model rates and `default` is the fallback for unknown models.
+
+At runtime you can still override individual models without touching that file, via `pricingOverrides` (or replace entries wholesale via `pricing`) in `llm-proxy.config.json`.
 
 ## Usage
 
@@ -190,7 +200,8 @@ proxy/
 │   │   ├── db.ts           # Database operations
 │   │   ├── config.ts       # Configuration management
 │   │   ├── logger.ts       # Structured logging
-│   │   ├── pricing.ts      # Model pricing data
+│   │   ├── pricing.ts      # Cost calculation logic
+│   │   ├── model-pricing.json # Model pricing data (single source of truth)
 │   │   ├── providers.ts    # Multi-provider support
 │   │   └── routes/         # API route handlers
 │   └── data/               # SQLite database

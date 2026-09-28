@@ -100,9 +100,17 @@ export type SessionSummary = {
   last_stop_reason: string | null
 }
 
+// One tool call with a compact argument summary (file path, command, query…)
+export type ToolCallDetail = { name: string; detail: string | null }
+
 export type SessionRequest = Omit<RequestRecord, 'request_body' | 'response_body'> & {
   seq: number
   context_growth: number | null
+  // Turn drill-down only: tool calls with arguments, the assistant's answer
+  // snippet, and the model's reasoning/thinking snippet when exposed
+  tool_call_details?: ToolCallDetail[] | null
+  response_snippet?: string | null
+  reasoning_snippet?: string | null
 }
 
 // Per-turn rollup within a session (grouped by the x-llm-proxy-turn-id header)

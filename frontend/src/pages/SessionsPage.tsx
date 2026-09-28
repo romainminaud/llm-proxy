@@ -5,7 +5,6 @@ import RequestDetail from '../components/RequestDetail'
 import RequestTimelineTable from '../components/RequestTimelineTable'
 import TurnsTable from '../components/TurnsTable'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -17,7 +16,7 @@ import {
 } from '@/components/ui/table'
 import type { RequestRecord, SessionDetail, SessionSummary } from '../types'
 import { formatRatio, shortSessionId } from '../utils/toolCalls'
-import { formatDuration, formatTokens, stripModelSuffix } from '../utils/format'
+import { compactTokens, formatDuration, formatTokens, stripModelSuffix } from '../utils/format'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 const AUTO_REFRESH_MS = 10000
@@ -42,25 +41,22 @@ export function PageSubtitle({ children }: { children: React.ReactNode }) {
   return <p className="mb-5 text-[13px] text-ink-tertiary">{children}</p>
 }
 
-export function StatCard({ label, value, title }: { label: string; value: React.ReactNode; title?: string }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="font-mono text-lg font-semibold tabular-nums leading-6 text-ink" title={title}>
-          {value}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+export type StatItem = { label: string; value: React.ReactNode; title?: string }
 
-export function StatsRow({ children }: { children: React.ReactNode }) {
+// Compact KPI row: one slim bordered strip instead of a grid of cards.
+// Falsy items are skipped so callers can include stats conditionally.
+export function StatStrip({ items }: { items: Array<StatItem | null | false | undefined> }) {
+  const visible = items.filter((item): item is StatItem => Boolean(item))
   return (
-    <div className="mb-5 grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
-      {children}
+    <div className="mb-5 flex flex-wrap items-baseline gap-x-8 gap-y-2 rounded-lg border border-line-subtle bg-surface px-4 py-2.5">
+      {visible.map(item => (
+        <div key={item.label} title={item.title}>
+          <div className="microlabel">{item.label}</div>
+          <div className="whitespace-nowrap font-mono text-sm font-semibold tabular-nums leading-5 text-ink">
+            {item.value}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -176,27 +172,27 @@ function InsightsPanel({ insights }: { insights: SessionInsights }) {
   return (
     <div className="mb-5">
       <div className="microlabel mb-2">Insights</div>
-      <StatsRow>
-        <StatCard
-          label="Tools schema (est)"
-          value={insights.tools_schema_est_tokens !== null
-            ? `~${formatTokens(insights.tools_schema_est_tokens)} tok`
-            : '—'}
-        />
-        <StatCard
-          label="System prompt (est)"
-          value={insights.system_prompt_est_tokens !== null
-            ? `~${formatTokens(insights.system_prompt_est_tokens)} tok`
-            : '—'}
-        />
-        <StatCard label="cache_control blocks" value={insights.cache_control_blocks ?? '—'} />
-        {(insights.ephemeral_5m_tokens !== null || insights.ephemeral_1h_tokens !== null) && (
-          <StatCard
-            label="Cache TTL (5m / 1h)"
-            value={`${formatTokens(insights.ephemeral_5m_tokens)} / ${formatTokens(insights.ephemeral_1h_tokens)}`}
-          />
-        )}
-      </StatsRow>
+      <StatStrip
+        items={[
+          {
+            label: 'Tools schema (est)',
+            value: insights.tools_schema_est_tokens !== null
+              ? `~${formatTokens(insights.tools_schema_est_tokens)} tok`
+              : '—',
+          },
+          {
+            label: 'System prompt (est)',
+            value: insights.system_prompt_est_tokens !== null
+              ? `~${formatTokens(insights.system_prompt_est_tokens)} tok`
+              : '—',
+          },
+          { label: 'cache_control blocks', value: insights.cache_control_blocks ?? '—' },
+          (insights.ephemeral_5m_tokens !== null || insights.ephemeral_1h_tokens !== null) && {
+            label: 'Cache TTL (5m / 1h)',
+            value: `${formatTokens(insights.ephemeral_5m_tokens)} / ${formatTokens(insights.ephemeral_1h_tokens)}`,
+          },
+        ]}
+      />
       {insights.cache_invalidation_warnings.length > 0 && (
         <div className="mb-4 rounded-md border border-danger/25 bg-danger/5 px-3 py-2 text-[13px] text-danger">
           Cache prefix likely invalidated after turn{insights.cache_invalidation_warnings.length > 1 ? 's' : ''}{' '}
@@ -272,23 +268,30 @@ function SessionDetailView({ sessionId }: { sessionId: string }) {
       </PageTitle>
       <div className="mb-5" />
 
-      <StatsRow>
-        <StatCard label="Requests" value={session.request_count} />
-        {turns && turns.length > 0 && <StatCard label="Turns" value={turns.length} />}
-        <StatCard
-          label="Wall / API time"
-          value={`${formatDuration(session.wall_ms)} / ${formatDuration(session.api_ms)}`}
-          title={`~${formatDuration(Math.max(0, modelToolTime))} in tools/user time`}
-        />
-        <StatCard label="Cache hit" value={formatRatio(session.cache_hit_ratio)} />
-        <StatCard
-          label="Cache read / write"
-          value={`${formatTokens(session.cache_read_tokens)} / ${formatTokens(session.cache_write_tokens)}`}
-        />
-        <StatCard label="Output" value={formatTokens(session.output_tokens)} />
-        <StatCard label="Tool calls" value={session.tool_calls} />
-        <StatCard label="Total cost" value={`$${session.total_cost.toFixed(4)}`} />
-      </StatsRow>
+      <StatStrip
+        items={[
+          { label: 'Requests', value: session.request_count },
+          turns && turns.length > 0 && { label: 'Turns', value: turns.length },
+          {
+            label: 'Wall / API time',
+            value: `${formatDuration(session.wall_ms)} / ${formatDuration(session.api_ms)}`,
+            title: `~${formatDuration(Math.max(0, modelToolTime))} in tools/user time`,
+          },
+          { label: 'Cache hit', value: formatRatio(session.cache_hit_ratio) },
+          {
+            label: 'Cache r/w',
+            value: `${compactTokens(session.cache_read_tokens)} / ${compactTokens(session.cache_write_tokens)}`,
+            title: `${session.cache_read_tokens.toLocaleString()} read / ${session.cache_write_tokens.toLocaleString()} written`,
+          },
+          {
+            label: 'Output',
+            value: compactTokens(session.output_tokens),
+            title: `${session.output_tokens.toLocaleString()} output tokens`,
+          },
+          { label: 'Tool calls', value: session.tool_calls },
+          { label: 'Total cost', value: `$${session.total_cost.toFixed(4)}` },
+        ]}
+      />
 
       {session.agent_entrypoint && (
         <p className="mb-4 text-[13px] text-ink-tertiary">

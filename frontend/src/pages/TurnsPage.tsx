@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ErrorBoundary from '../components/ErrorBoundary'
 import RequestDetail from '../components/RequestDetail'
-import RequestTimelineTable from '../components/RequestTimelineTable'
+import TurnRequestsTable from '../components/TurnRequestsTable'
 import TurnsTable from '../components/TurnsTable'
 import { Badge } from '@/components/ui/badge'
 import type { RequestRecord, TurnDetail, TurnListItem } from '../types'
 import { shortSessionId } from '../utils/toolCalls'
-import { formatDuration, formatTokens, ordinal, stripModelSuffix } from '../utils/format'
-import { PageSubtitle, PageTitle, StatCard, StatsRow } from './SessionsPage'
+import { compactTokens, formatDuration, ordinal, stripModelSuffix } from '../utils/format'
+import { PageSubtitle, PageTitle, StatStrip } from './SessionsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 const AUTO_REFRESH_MS = 10000
@@ -112,32 +112,36 @@ function TurnDetailView({ sessionId, turnId }: { sessionId: string; turnId: stri
       )}
       {!turn.turn_prompt && <div className="mb-5" />}
 
-      <StatsRow>
-        <StatCard
-          label="Requests"
-          value={
-            <>
-              {turn.request_count}
-              {turn.error_count > 0 && <span className="text-danger"> ({turn.error_count}✗)</span>}
-            </>
-          }
-        />
-        <StatCard
-          label="Wall / API time"
-          value={`${formatDuration(turn.wall_ms)} / ${formatDuration(turn.api_ms)}`}
-        />
-        <StatCard
-          label="Cache read / write"
-          value={`${formatTokens(turn.cache_read_tokens)} / ${formatTokens(turn.cache_write_tokens)}`}
-        />
-        <StatCard
-          label="Cache hit"
-          value={cacheHitRatio === null ? '—' : `${Math.round(cacheHitRatio * 100)}%`}
-        />
-        <StatCard label="Output" value={formatTokens(turn.output_tokens)} />
-        <StatCard label="Tool calls" value={turn.tool_calls} />
-        <StatCard label="Cost" value={`$${turn.total_cost.toFixed(4)}`} />
-      </StatsRow>
+      <StatStrip
+        items={[
+          {
+            label: 'Requests',
+            value: (
+              <>
+                {turn.request_count}
+                {turn.error_count > 0 && <span className="text-danger"> ({turn.error_count}✗)</span>}
+              </>
+            ),
+          },
+          { label: 'Wall / API time', value: `${formatDuration(turn.wall_ms)} / ${formatDuration(turn.api_ms)}` },
+          {
+            label: 'Cache r/w',
+            value: `${compactTokens(turn.cache_read_tokens)} / ${compactTokens(turn.cache_write_tokens)}`,
+            title: `${turn.cache_read_tokens.toLocaleString()} read / ${turn.cache_write_tokens.toLocaleString()} written`,
+          },
+          {
+            label: 'Cache hit',
+            value: cacheHitRatio === null ? '—' : `${Math.round(cacheHitRatio * 100)}%`,
+          },
+          {
+            label: 'Output',
+            value: compactTokens(turn.output_tokens),
+            title: `${turn.output_tokens.toLocaleString()} output tokens`,
+          },
+          { label: 'Tool calls', value: turn.tool_calls },
+          { label: 'Cost', value: `$${turn.total_cost.toFixed(4)}` },
+        ]}
+      />
 
       {(turn.agent_entrypoint || turn.models.length > 0) && (
         <p className="mb-4 text-[13px] text-ink-tertiary">
@@ -158,7 +162,7 @@ function TurnDetailView({ sessionId, turnId }: { sessionId: string; turnId: stri
         </div>
       )}
 
-      <RequestTimelineTable requests={requests} onView={openRequest} />
+      <TurnRequestsTable requests={requests} onView={openRequest} />
 
       {selectedRequest && (
         <div className="modal" onClick={() => setSelectedRequest(null)}>

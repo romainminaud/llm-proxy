@@ -123,6 +123,12 @@ export type SessionRequest = Omit<RequestRecord, 'request_body' | 'response_body
   seq: number
   // total_input_tokens delta vs the previous request in the session; null for the first
   context_growth: number | null
+  // Populated on the turn drill-down only (requires parsing stored bodies):
+  // tool calls with argument summaries, the leading assistant text, and the
+  // model's reasoning/thinking text (summary only, when the provider exposes it)
+  tool_call_details?: Array<{ name: string; detail: string | null }> | null
+  response_snippet?: string | null
+  reasoning_snippet?: string | null
 }
 
 // Cost/call split by model within one turn (e.g. agent model vs title-gen model)
