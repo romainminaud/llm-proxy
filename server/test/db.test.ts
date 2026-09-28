@@ -1,6 +1,6 @@
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { SaveRequestInput } from '../src/types.ts'
@@ -97,6 +97,31 @@ test('clearAll removes all requests', async () => {
   db.clearAll()
   const all = db.getRequests({})
   assert.equal(all.length, 0)
+})
+
+test('saveRequest mirrors the record to <dataDir>/requests/<id>.json', async () => {
+  db.clearAll()
+  await db.saveRequest(createRequest({ id: 'req-json-1', model: 'gpt-4o' }))
+
+  const file = join(tempDir, 'requests', 'req-json-1.json')
+  const mirrored = JSON.parse(readFileSync(file, 'utf-8'))
+  assert.equal(mirrored.id, 'req-json-1')
+  assert.equal(mirrored.model, 'gpt-4o')
+  assert.deepEqual(mirrored.request_body, { input: 'hi' })
+  assert.equal(mirrored.total_cost, 0.0032)
+})
+
+test('deleteRequest and clearAll remove the mirrored JSON files', async () => {
+  db.clearAll()
+  await db.saveRequest(createRequest({ id: 'req-json-del' }))
+  await db.saveRequest(createRequest({ id: 'req-json-keep' }))
+
+  await db.deleteRequest('req-json-del')
+  assert.equal(existsSync(join(tempDir, 'requests', 'req-json-del.json')), false)
+  assert.ok(existsSync(join(tempDir, 'requests', 'req-json-keep.json')))
+
+  db.clearAll()
+  assert.equal(existsSync(join(tempDir, 'requests', 'req-json-keep.json')), false)
 })
 
 test('getRequest returns null for non-existent id', () => {

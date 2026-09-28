@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { extractAgentMeta, overridesFromHeaders } from '../src/agent-meta.ts'
+import { extractAgentMeta, extractReasoningSnippet, extractResponseSnippet, extractToolCallDetails, overridesFromHeaders } from '../src/agent-meta.ts'
 
 // --- Anthropic / Claude Code shaped fixtures ---
 
@@ -312,4 +312,127 @@ test('header overrides: turn id stored verbatim, null without the header', () =>
   const bare = extractAgentMeta('anthropic', claudeCodeRequest, claudeCodeResponse)
   assert.equal(bare.turnId, null)
   assert.equal(overridesFromHeaders({ 'x-llm-proxy-turn-id': '   ' }).turnId, null)
+})
+
+test('tool call details: argument summaries per provider shape', () => {
+  const anthropic = {
+    content: [
+      { type: 'text', text: 'Let me look.' },
+      { type: 'tool_use', name: 'Read', input: { file_path: '/repo/src/db.ts' } },
+      { type: 'tool_use', name: 'Bash', input: { command: 'npm test', description: 'run tests' } },
+    ],
+    stop_reason: 'tool_use',
+  }
+  assert.deepEqual(extractToolCallDetails('anthropic', anthropic), [
+    { name: 'Read', detail: '/repo/src/db.ts' },
+    { name: 'Bash', detail: 'npm test' },
+  ])
+
+  // OpenAI chat completions: arguments arrive as a JSON string
+  const openaiChat = {
+    choices: [{
+      message: {
+        tool_calls: [
+          { function: { name: 'read', arguments: '{"path":"src/app.py"}' } },
+        ],
+      },
+      finish_reason: 'tool_calls',
+    }],
+  }
+  assert.deepEqual(extractToolCallDetails('openai', openaiChat), [
+    { name: 'read', detail: 'src/app.py' },
+  ])
+
+  // Responses API apply_patch: files surfaced from the patch text itself
+  const responsesApi = {
+    output: [
+      {
+        type: 'function_call',
+        name: 'apply_patch',
+        arguments: JSON.stringify({ input: '*** Begin Patch\n*** Update File: src/db.ts\n@@\n*** Add File: src/new.ts\n*** End Patch' }),
+      },
+    ],
+  }
+  assert.deepEqual(extractToolCallDetails('openai', responsesApi), [
+    { name: 'apply_patch', detail: 'update src/db.ts, add src/new.ts' },
+  ])
+
+  // Gemini: args object; shell-style string[] commands join
+  const gemini = {
+    candidates: [{
+      content: { parts: [{ functionCall: { name: 'exec', args: { command: ['bash', '-lc', 'ls -la'] } } }] },
+    }],
+  }
+  assert.deepEqual(extractToolCallDetails('gemini', gemini), [
+    { name: 'exec', detail: 'bash -lc ls -la' },
+  ])
+
+  // Absence rule: unrecognized shape → null, valid shape without tools → []
+  assert.equal(extractToolCallDetails('openai', { foo: 1 }), null)
+  assert.deepEqual(extractToolCallDetails('anthropic', { content: [{ type: 'text', text: 'hi' }] }), [])
+})
+
+test('response snippet: leading assistant text, reasoning excluded, long text clipped', () => {
+  assert.equal(
+    extractResponseSnippet('anthropic', { content: [{ type: 'text', text: '  Done — patched db.ts.  ' }] }),
+    'Done — patched db.ts.'
+  )
+  assert.equal(
+    extractResponseSnippet('openai', { choices: [{ message: { content: 'Here is the summary.' } }] }),
+    'Here is the summary.'
+  )
+  assert.equal(
+    extractResponseSnippet('openai', {
+      output: [{ type: 'reasoning' }, { type: 'message', content: [{ type: 'output_text', text: 'All tests pass.' }] }],
+    }),
+    'All tests pass.'
+  )
+  // Gemini thought parts are reasoning, not the reply
+  assert.equal(
+    extractResponseSnippet('gemini', {
+      candidates: [{ content: { parts: [{ text: 'thinking…', thought: true }, { text: 'The answer is 42.' }] } }],
+    }),
+    'The answer is 42.'
+  )
+  assert.equal(extractResponseSnippet('anthropic', { content: [] }), null)
+  const long = extractResponseSnippet('openai', { choices: [{ message: { content: 'x'.repeat(500) } }] })
+  assert.equal(long?.length, 281) // 280 chars + ellipsis
+  assert.ok(long?.endsWith('…'))
+})
+
+test('reasoning snippet: thinking/summary text per provider, null when hidden', () => {
+  assert.equal(
+    extractReasoningSnippet('anthropic', {
+      content: [{ type: 'thinking', thinking: 'The user wants a map.' }, { type: 'text', text: 'On it.' }],
+    }),
+    'The user wants a map.'
+  )
+  // Gemini: thought parts only
+  assert.equal(
+    extractReasoningSnippet('gemini', {
+      candidates: [{ content: { parts: [{ text: 'Considering options.', thought: true }, { text: 'Answer.' }] } }],
+    }),
+    'Considering options.'
+  )
+  // Responses API: summary text of reasoning items
+  assert.equal(
+    extractReasoningSnippet('openai', {
+      output: [
+        { type: 'reasoning', summary: [{ type: 'summary_text', text: '**Evaluating visibility change**' }] },
+        { type: 'message', content: [{ type: 'output_text', text: 'Done.' }] },
+      ],
+    }),
+    '**Evaluating visibility change**'
+  )
+  // OpenRouter/DeepSeek chat: message.reasoning / reasoning_content
+  assert.equal(
+    extractReasoningSnippet('openrouter', { choices: [{ message: { reasoning: 'Step 1…', content: 'Hi' } }] }),
+    'Step 1…'
+  )
+  // Encrypted-only reasoning exposes nothing readable → null
+  assert.equal(
+    extractReasoningSnippet('openai', { output: [{ type: 'reasoning', encrypted_content: 'gAAAA…', summary: [] }] }),
+    null
+  )
+  assert.equal(extractReasoningSnippet('anthropic', { content: [{ type: 'text', text: 'Hi' }] }), null)
 })

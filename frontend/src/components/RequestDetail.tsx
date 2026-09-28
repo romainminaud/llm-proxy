@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { estimateTokens, getMessageContent } from '../utils/messageUtils'
+import { estimateTokens, getMessageContent, normalizeResponsesItem } from '../utils/messageUtils'
 import type { MessageLike, RequestRecord } from '../types'
 import Message from './Message'
 import ReplayComparison from './ReplayComparison'
@@ -38,16 +38,17 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
           content: item.parts?.map(p => p.text || '').join('') || '',
         }))
     }
+    // OpenAI Responses API: input is a string or a list of mixed items
+    // (messages, function_call, function_call_output, reasoning, …)
     if (r.request_body?.input) {
       const input = r.request_body.input
       if (typeof input === 'string') {
         return [{ role: 'user', content: input }]
       }
       if (Array.isArray(input)) {
-        return input.map(item => {
-          if (typeof item === 'string') return { role: 'user', content: item }
-          return item as MessageLike
-        })
+        return input
+          .map(normalizeResponsesItem)
+          .filter((message): message is MessageLike => message !== null)
       }
     }
     return []
@@ -93,19 +94,11 @@ function RequestDetail({ request: r, apiBase, onCopyId, copiedId }: RequestDetai
       }).filter(Boolean)
       return parts.length ? [{ role: 'assistant', content: parts.join('\n\n') }] : []
     }
+    // OpenAI Responses API: output mixes messages, function_call items, and reasoning
     if (r.response_body?.output) {
-      return r.response_body.output
-        .map((item: { type?: string; role?: string; content?: Array<{ type?: string; text?: string }> }) => {
-          if (item.type === 'message' && item.content) {
-            const textContent = item.content
-              .filter(contentItem => contentItem.type === 'output_text' || contentItem.type === 'text')
-              .map(contentItem => contentItem.text || '')
-              .join('')
-            return { role: item.role || 'assistant', content: textContent }
-          }
-          return null
-        })
-        .filter((message: MessageLike | null): message is MessageLike => Boolean(message))
+      return (r.response_body.output as unknown[])
+        .map(normalizeResponsesItem)
+        .filter((message): message is MessageLike => message !== null)
     }
     return []
   }

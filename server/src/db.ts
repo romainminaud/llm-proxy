@@ -1,6 +1,8 @@
 import { resolve } from 'path';
+import { extractReasoningSnippet, extractResponseSnippet, extractToolCallDetails, type ToolCallDetail } from './agent-meta.js';
 import { config } from './config.js';
 import { getDatabase, initDatabase } from './database.js';
+import { clearRequestFiles, deleteRequestFile, writeRequestFile } from './request-files.js';
 import type {
   ModelStats,
   RequestRecord,
@@ -111,7 +113,7 @@ function rowToRecord(row: RequestRow): RequestRecord {
   };
 }
 
-export function saveRequest(data: SaveRequestInput): void {
+export function saveRequest(data: SaveRequestInput): Promise<void> {
   const db = getDatabase();
 
   const totalInputTokens = data.totalInputTokens ?? data.inputTokens ?? null;
@@ -128,6 +130,48 @@ export function saveRequest(data: SaveRequestInput): void {
   ) {
     nonCachedInputTokens = Math.max(0, totalInputTokens - cachedInputTokens);
   }
+
+  // Built once, then written to both the row and the JSON mirror so the two
+  // can never drift.
+  const record: RequestRecord = {
+    id: data.id,
+    timestamp: data.timestamp,
+    method: data.method,
+    path: data.path,
+    provider: data.provider,
+    model: data.model,
+    request_body: data.requestBody,
+    response_body: data.responseBody ?? null,
+    status_code: data.statusCode,
+    duration_ms: data.durationMs,
+    input_tokens: totalInputTokens,
+    total_input_tokens: totalInputTokens,
+    non_cached_input_tokens: nonCachedInputTokens,
+    cached_input_tokens: cachedInputTokens,
+    output_tokens: data.outputTokens ?? null,
+    cached_tokens: cachedInputTokens,
+    cache_write_tokens: data.cacheWriteTokens ?? null,
+    input_cost: data.inputCost,
+    cached_cost: data.cachedCost,
+    cache_write_cost: data.cacheWriteCost,
+    output_cost: data.outputCost,
+    total_cost: data.totalCost,
+    error: data.error ?? null,
+    replay_of: data.replayOf ?? null,
+    session_id: data.sessionId ?? null,
+    turn_id: data.turnId ?? null,
+    turn_prompt: data.turnPrompt ?? null,
+    agent_entrypoint: data.agentEntrypoint ?? null,
+    agent_version: data.agentVersion ?? null,
+    tools_defined_count: data.toolsDefinedCount ?? null,
+    tool_calls_count: data.toolCallsCount ?? null,
+    tool_names: data.toolNames ?? null,
+    reasoning_tokens: data.reasoningTokens ?? null,
+    stop_reason: data.stopReason ?? null,
+    message_count: data.messageCount ?? null,
+    request_bytes: data.requestBytes ?? null,
+    response_bytes: data.responseBytes ?? null,
+  };
 
   const stmt = db.prepare(`
     INSERT INTO requests (
@@ -156,44 +200,47 @@ export function saveRequest(data: SaveRequestInput): void {
   `);
 
   stmt.run(
-    data.id,
-    data.timestamp,
-    data.method,
-    data.path,
-    data.provider,
-    data.model,
-    JSON.stringify(data.requestBody),
-    data.responseBody ? JSON.stringify(data.responseBody) : null,
-    data.statusCode,
-    data.durationMs,
-    totalInputTokens,
-    totalInputTokens,
-    nonCachedInputTokens,
-    cachedInputTokens,
-    data.outputTokens ?? null,
-    cachedInputTokens,
-    data.cacheWriteTokens ?? null,
-    data.inputCost,
-    data.cachedCost,
-    data.cacheWriteCost,
-    data.outputCost,
-    data.totalCost,
-    data.error ?? null,
-    data.replayOf ?? null,
-    data.sessionId ?? null,
-    data.turnId ?? null,
-    data.turnPrompt ?? null,
-    data.agentEntrypoint ?? null,
-    data.agentVersion ?? null,
-    data.toolsDefinedCount ?? null,
-    data.toolCallsCount ?? null,
-    data.toolNames ? JSON.stringify(data.toolNames) : null,
-    data.reasoningTokens ?? null,
-    data.stopReason ?? null,
-    data.messageCount ?? null,
-    data.requestBytes ?? null,
-    data.responseBytes ?? null
+    record.id,
+    record.timestamp,
+    record.method,
+    record.path,
+    record.provider,
+    record.model,
+    JSON.stringify(record.request_body),
+    record.response_body ? JSON.stringify(record.response_body) : null,
+    record.status_code,
+    record.duration_ms,
+    record.input_tokens,
+    record.total_input_tokens,
+    record.non_cached_input_tokens,
+    record.cached_input_tokens,
+    record.output_tokens,
+    record.cached_tokens,
+    record.cache_write_tokens,
+    record.input_cost,
+    record.cached_cost,
+    record.cache_write_cost,
+    record.output_cost,
+    record.total_cost,
+    record.error,
+    record.replay_of,
+    record.session_id,
+    record.turn_id,
+    record.turn_prompt,
+    record.agent_entrypoint,
+    record.agent_version,
+    record.tools_defined_count,
+    record.tool_calls_count,
+    record.tool_names ? JSON.stringify(record.tool_names) : null,
+    record.reasoning_tokens,
+    record.stop_reason,
+    record.message_count,
+    record.request_bytes,
+    record.response_bytes
   );
+
+  // Non-blocking: callers may ignore the promise, tests can await it.
+  return writeRequestFile(record);
 }
 
 type RequestFilters = {
@@ -640,6 +687,42 @@ export function getTurnDetail(sessionId: string, turnId: string): TurnDetail | n
   const rows = queryTimeline(['session_id = ?', 'turn_id = ?'], [sessionId, turnId]);
   const { requests, toolUsage } = buildTimeline(rows);
 
+  // Turn drill-down enrichment: a turn is a handful of requests, so loading
+  // their response bodies to surface tool arguments (which file was read /
+  // patched) and the assistant's answer snippet is affordable here — unlike
+  // on the full session timeline.
+  const bodyRows = db.prepare(`
+    SELECT id, provider, response_body FROM requests
+    WHERE session_id = ? AND turn_id = ?
+  `).all(sessionId, turnId) as Array<{ id: string; provider: string; response_body: string | null }>;
+
+  const activityById = new Map<string, {
+    tool_call_details: ToolCallDetail[] | null;
+    response_snippet: string | null;
+    reasoning_snippet: string | null;
+  }>();
+  for (const row of bodyRows) {
+    if (!row.response_body) continue;
+    try {
+      const body: unknown = JSON.parse(row.response_body);
+      activityById.set(row.id, {
+        tool_call_details: extractToolCallDetails(row.provider, body),
+        response_snippet: extractResponseSnippet(row.provider, body),
+        reasoning_snippet: extractReasoningSnippet(row.provider, body),
+      });
+    } catch {
+      // unparseable body → leave the request unenriched
+    }
+  }
+  for (const request of requests) {
+    const activity = activityById.get(request.id);
+    if (activity) {
+      request.tool_call_details = activity.tool_call_details;
+      request.response_snippet = activity.response_snippet;
+      request.reasoning_snippet = activity.reasoning_snippet;
+    }
+  }
+
   const models = turnModelStats(' AND session_id = ? AND turn_id = ?', [sessionId, turnId]);
 
   return {
@@ -722,14 +805,16 @@ export function getStats(): Stats {
   };
 }
 
-export function deleteRequest(id: string): void {
+export function deleteRequest(id: string): Promise<void> {
   const db = getDatabase();
   db.prepare('DELETE FROM requests WHERE id = ?').run(id);
+  return deleteRequestFile(id);
 }
 
 export function clearAll(): void {
   const db = getDatabase();
   db.prepare('DELETE FROM requests').run();
+  clearRequestFiles();
 }
 
 export function getRequestCount(): number {

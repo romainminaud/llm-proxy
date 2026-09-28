@@ -1,3 +1,5 @@
+import pricingData from './model-pricing.json' with { type: 'json' };
+
 export type PricingEntry = {
   input: number
   output: number
@@ -13,129 +15,14 @@ export type CostInfo = {
   totalCost: number
 }
 
-// Default pricing per 1M tokens (as of 2025)
-// Prices in USD - these are used as fallback when not configured
-export const DEFAULT_MODEL_PRICING: Record<string, PricingEntry> = {
-  // GPT-4.1 models
-  'gpt-4.1': { input: 2.00, output: 8.00 },
-  'gpt-4.1-2025-04-14': { input: 2.00, output: 8.00 },
-  'gpt-4.1-mini': { input: 0.40, output: 1.60 },
-  'gpt-4.1-mini-2025-04-14': { input: 0.40, output: 1.60 },
-  'gpt-4.1-nano': { input: 0.10, output: 0.40 },
-  'gpt-4.1-nano-2025-04-14': { input: 0.10, output: 0.40 },
+// All base pricing lives in model-pricing.json — the single source of truth.
+const BASE_MODEL_PRICING: Record<string, PricingEntry> = pricingData.models;
 
-  // GPT-4o models
-  'gpt-4o': { input: 2.50, output: 10.00 },
-  'gpt-4o-2024-11-20': { input: 2.50, output: 10.00 },
-  'gpt-4o-2024-08-06': { input: 2.50, output: 10.00 },
-  'gpt-4o-2024-05-13': { input: 5.00, output: 15.00 },
-  'gpt-4o-mini': { input: 0.15, output: 0.60 },
-  'gpt-4o-mini-2024-07-18': { input: 0.15, output: 0.60 },
+// Fallback pricing for unknown models (from model-pricing.json "default")
+const DEFAULT_PRICING: PricingEntry = pricingData.default;
 
-  // GPT-4 Turbo
-  'gpt-4-turbo': { input: 10.00, output: 30.00 },
-  'gpt-4-turbo-2024-04-09': { input: 10.00, output: 30.00 },
-  'gpt-4-turbo-preview': { input: 10.00, output: 30.00 },
-
-  // GPT-4
-  'gpt-4': { input: 30.00, output: 60.00 },
-  'gpt-4-0613': { input: 30.00, output: 60.00 },
-  'gpt-4-32k': { input: 60.00, output: 120.00 },
-
-  // GPT-3.5 Turbo
-  'gpt-3.5-turbo': { input: 0.50, output: 1.50 },
-  'gpt-3.5-turbo-0125': { input: 0.50, output: 1.50 },
-  'gpt-3.5-turbo-1106': { input: 1.00, output: 2.00 },
-  'gpt-3.5-turbo-instruct': { input: 1.50, output: 2.00 },
-
-  // o1 models
-  'o1': { input: 15.00, output: 60.00 },
-  'o1-2024-12-17': { input: 15.00, output: 60.00 },
-  'o1-preview': { input: 15.00, output: 60.00 },
-  'o1-mini': { input: 3.00, output: 12.00 },
-  'o1-mini-2024-09-12': { input: 3.00, output: 12.00 },
-  'o3-mini': { input: 1.10, output: 4.40 },
-  'o3-mini-2025-01-31': { input: 1.10, output: 4.40 },
-
-  // GPT-5 models
-  'gpt-5.2': { input: 1.75, cached: 0.175, output: 14.00 },
-  'gpt-5-mini': { input: 0.25, cached: 0.025, output: 2.00 },
-
-  // Embeddings
-  'text-embedding-3-small': { input: 0.02, output: 0 },
-  'text-embedding-3-large': { input: 0.13, output: 0 },
-  'text-embedding-ada-002': { input: 0.10, output: 0 },
-
-  // Gemini 3.x models
-  'gemini-3.1-pro-preview': { input: 2.00, cached: 0.20, output: 12.00 },
-  'gemini-3.1-pro-preview-customtools': { input: 2.00, cached: 0.20, output: 12.00 },
-  'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.50 },
-  'gemini-3-pro-preview': { input: 2.00, cached: 0.20, output: 12.00 },
-  'gemini-3-flash-preview': { input: 0.50, cached: 0.05, output: 3.00 },
-
-  // Gemini 2.5 models
-  'gemini-2.5-pro': { input: 1.25, cached: 0.125, output: 10.00 },
-  'gemini-2.5-flash': { input: 0.30, cached: 0.03, output: 2.50 },
-  'gemini-2.5-flash-lite': { input: 0.10, cached: 0.01, output: 0.40 },
-  'gemini-2.5-flash-lite-preview-09-2025': { input: 0.10, cached: 0.01, output: 0.40 },
-
-  // Gemini 2.0 models
-  'gemini-2.0-flash': { input: 0.10, cached: 0.025, output: 0.40 },
-  'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
-
-  // Gemini 1.5 models (legacy)
-  'gemini-1.5-pro': { input: 1.25, cached: 0.3125, output: 5.00 },
-  'gemini-1.5-flash': { input: 0.075, cached: 0.01875, output: 0.30 },
-
-  // Anthropic Claude 5 models
-  'claude-opus-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
-  'claude-sonnet-5': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-fable-5': { input: 10.00, cached: 1.00, cacheWrite: 12.50, output: 50.00 },
-
-  // Anthropic Claude 4 models (base names for date-suffix fallback)
-  'claude-opus-4-8': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
-  'claude-opus-4-7': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
-  'claude-opus-4-6': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
-  'claude-sonnet-4-6': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-opus-4-5': { input: 5.00, cached: 0.50, cacheWrite: 6.25, output: 25.00 },
-  'claude-sonnet-4-5': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-sonnet-4': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-haiku-4-5': { input: 1.00, cached: 0.10, cacheWrite: 1.25, output: 5.00 },
-
-  // Anthropic Claude 3.x models (base names for date-suffix fallback)
-  'claude-3-7-sonnet': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-3-5-sonnet': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-3-5-haiku': { input: 1.00, cached: 0.10, cacheWrite: 1.25, output: 5.00 },
-  'claude-3-opus': { input: 15.00, cached: 1.50, cacheWrite: 18.75, output: 75.00 },
-  'claude-3-sonnet': { input: 3.00, cached: 0.30, cacheWrite: 3.75, output: 15.00 },
-  'claude-3-haiku': { input: 0.25, cached: 0.03, cacheWrite: 0.3125, output: 1.25 },
-
-  // DeepSeek models (OpenRouter prices as of 2026-08; keys match the
-  // vendor-stripped OpenRouter ids, e.g. "deepseek/deepseek-v4-pro").
-  // Note: DeepSeek's own API bills peak/off-peak (peak = 2x these off-peak
-  // rates, 01:00-04:00 & 06:00-10:00 UTC); a static table can't model that.
-  'deepseek-v4-pro': { input: 0.66, cached: 0.022, output: 1.98 },
-  'deepseek-v4-pro-0813': { input: 0.66, cached: 0.022, output: 1.98 },
-  'deepseek-v4-flash': { input: 0.0826, cached: 0.0165, output: 0.1652 },
-  'deepseek-v4-flash-0731': { input: 0.14, cached: 0.028, output: 0.28 },
-  'deepseek-v3.2': { input: 0.269, cached: 0.1345, output: 0.40 },
-  'deepseek-v3.2-exp': { input: 0.27, output: 0.41 },
-  'deepseek-v3.1-terminus': { input: 0.27, output: 1.00 },
-  'deepseek-chat-v3.1': { input: 0.25, cached: 0.13, output: 0.95 },
-  'deepseek-chat-v3-0324': { input: 0.27, cached: 0.135, output: 1.12 },
-  'deepseek-chat': { input: 0.2574, output: 1.0287 },
-  'deepseek-r1': { input: 0.70, output: 2.50 },
-  'deepseek-r1-0528': { input: 0.50, cached: 0.35, output: 2.15 },
-  'deepseek-r1-distill-llama-70b': { input: 0.80, output: 0.80 },
-  // DeepSeek official-API alias (reasoning mode of the current flagship)
-  'deepseek-reasoner': { input: 0.66, cached: 0.022, output: 1.98 },
-};
-
-// Default pricing for unknown models
-const DEFAULT_PRICING: PricingEntry = { input: 10.00, output: 30.00 };
-
-// Active pricing - starts with defaults, can be overridden by config
-export let MODEL_PRICING: Record<string, PricingEntry> = { ...DEFAULT_MODEL_PRICING };
+// Active pricing - starts with the JSON values, can be overridden by config
+export let MODEL_PRICING: Record<string, PricingEntry> = { ...BASE_MODEL_PRICING };
 
 /**
  * Set pricing for a specific model (used by config loading)
@@ -149,14 +36,14 @@ export function setModelPricing(model: string, pricing: PricingEntry): void {
  * Merges with defaults so unconfigured models still have fallback pricing
  */
 export function loadPricingFromConfig(pricing: Record<string, PricingEntry>): void {
-  MODEL_PRICING = { ...DEFAULT_MODEL_PRICING, ...pricing };
+  MODEL_PRICING = { ...BASE_MODEL_PRICING, ...pricing };
 }
 
 /**
  * Reset pricing to defaults (useful for testing)
  */
 export function resetPricingToDefaults(): void {
-  MODEL_PRICING = { ...DEFAULT_MODEL_PRICING };
+  MODEL_PRICING = { ...BASE_MODEL_PRICING };
 }
 
 /**

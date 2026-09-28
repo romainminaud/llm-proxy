@@ -7,6 +7,9 @@ export type Config = {
   port: number;
   dataDir: string;
   databasePath: string;
+  // Mirror every saved request to <requestJsonDir>/<id>.json alongside the DB row.
+  saveRequestJson: boolean;
+  requestJsonDir: string;
   openaiBaseUrl: string;
   anthropicBaseUrl: string;
   geminiBaseUrl: string;
@@ -24,6 +27,8 @@ const DEFAULT_CONFIG: Config = {
   port: 8090,
   dataDir: './data',
   databasePath: './data/llm-proxy.db',
+  saveRequestJson: true,
+  requestJsonDir: './data/requests',
   openaiBaseUrl: 'https://api.openai.com',
   anthropicBaseUrl: 'https://api.anthropic.com',
   geminiBaseUrl: 'https://generativelanguage.googleapis.com',
@@ -70,6 +75,11 @@ function loadConfigFile(): Partial<Config> {
   return {};
 }
 
+// JSON has no native comments; keys starting with "_" (e.g. "_comment") are documentation, not models
+function stripCommentKeys(pricing: Record<string, PricingEntry>): Record<string, PricingEntry> {
+  return Object.fromEntries(Object.entries(pricing).filter(([key]) => !key.startsWith('_')));
+}
+
 function getNodeEnv(): 'development' | 'production' | 'test' {
   const env = process.env.NODE_ENV?.toLowerCase();
   if (env === 'production' || env === 'test') {
@@ -100,6 +110,11 @@ export function loadConfig(): Config {
     port,
     dataDir,
     databasePath: process.env.LLM_PROXY_DATABASE_PATH || fileConfig.databasePath || `${dataDir}/llm-proxy.db`,
+    // Defaults to on; set LLM_PROXY_SAVE_REQUEST_JSON=false (or the config key) to keep the DB only.
+    saveRequestJson: process.env.LLM_PROXY_SAVE_REQUEST_JSON
+      ? process.env.LLM_PROXY_SAVE_REQUEST_JSON !== 'false'
+      : fileConfig.saveRequestJson ?? DEFAULT_CONFIG.saveRequestJson,
+    requestJsonDir: process.env.LLM_PROXY_REQUEST_JSON_DIR || fileConfig.requestJsonDir || `${dataDir}/requests`,
     openaiBaseUrl,
     anthropicBaseUrl,
     geminiBaseUrl,
@@ -115,13 +130,13 @@ export function loadConfig(): Config {
 
   // Load full pricing config if provided (merges with defaults)
   if (config.pricing && Object.keys(config.pricing).length > 0) {
-    loadPricingFromConfig(config.pricing);
+    loadPricingFromConfig(stripCommentKeys(config.pricing));
     logger.info(`Loaded pricing for ${Object.keys(config.pricing).length} models from config`);
   }
 
   // Apply individual pricing overrides (for backward compatibility)
   if (config.pricingOverrides && Object.keys(config.pricingOverrides).length > 0) {
-    for (const [model, pricing] of Object.entries(config.pricingOverrides)) {
+    for (const [model, pricing] of Object.entries(stripCommentKeys(config.pricingOverrides))) {
       setModelPricing(model, pricing);
       logger.debug(`Applied pricing override for ${model}`, pricing);
     }

@@ -341,6 +341,260 @@ function byteLength(body: unknown): number | null {
   }
 }
 
+/** One tool call with a compact, human-scannable argument summary. */
+export type ToolCallDetail = {
+  name: string;
+  /** Most informative argument (file path, command, query…); null when none found. */
+  detail: string | null;
+};
+
+const TOOL_DETAIL_MAX_CHARS = 120;
+
+// Argument keys worth surfacing, most specific first. The first present,
+// non-empty value wins.
+const DETAIL_KEYS = [
+  'file_path', 'filePath', 'path', 'notebook_path',
+  'command', 'cmd',
+  'query', 'pattern', 'url',
+  'prompt', 'description', 'question', 'message', 'title',
+  'input', 'content', 'text',
+];
+
+function toDetailString(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  // e.g. shell tools: command: ["bash", "-lc", "…"]
+  if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
+    return (value as string[]).join(' ');
+  }
+  return null;
+}
+
+/**
+ * Codex-style apply_patch payloads carry the target files inside the patch
+ * text ("*** Update File: src/x.ts"). Surface those as "update src/x.ts".
+ */
+function patchFileSummary(text: string): string | null {
+  const matches = [...text.matchAll(/\*{3} (Add|Update|Delete) File: (.+)/g)];
+  if (matches.length === 0) return null;
+  return matches.map((m) => `${m[1].toLowerCase()} ${m[2].trim()}`).join(', ');
+}
+
+function summarizeToolInput(input: unknown, depth = 0): string | null {
+  const dict = asDict(input);
+  if (!dict) {
+    const direct = toDetailString(input);
+    return direct ? clipDetail(direct) : null;
+  }
+
+  // Patch text can hide under any key (input, patch, …) — scan string values first
+  for (const value of Object.values(dict)) {
+    if (typeof value === 'string' && value.includes('*** ')) {
+      const summary = patchFileSummary(value);
+      if (summary) return clipDetail(summary);
+    }
+  }
+
+  for (const key of DETAIL_KEYS) {
+    const detail = toDetailString(dict[key]);
+    if (detail && detail.trim()) return clipDetail(detail);
+  }
+
+  // Nested payloads (e.g. {questions: [{question: "…"}]}): try one level down
+  if (depth === 0) {
+    for (const value of Object.values(dict)) {
+      const nested = Array.isArray(value) ? value[0] : value;
+      if (asDict(nested)) {
+        const detail = summarizeToolInput(nested, 1);
+        if (detail) return detail;
+      }
+    }
+  }
+  return null;
+}
+
+function clipDetail(text: string): string {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  return singleLine.length > TOOL_DETAIL_MAX_CHARS
+    ? `${singleLine.slice(0, TOOL_DETAIL_MAX_CHARS)}…`
+    : singleLine;
+}
+
+function parseJsonArguments(raw: unknown): unknown {
+  const s = asString(raw);
+  if (!s) return null;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return s; // non-JSON argument strings still make a usable detail
+  }
+}
+
+/**
+ * Tool calls with argument summaries, in call order. Same shape-detection as
+ * extractToolCalls; null when the response shape is unrecognized.
+ */
+export function extractToolCallDetails(providerName: string, responseBody: unknown): ToolCallDetail[] | null {
+  const response = asDict(responseBody);
+  if (!response) return null;
+
+  if (providerName === 'anthropic') {
+    const content = asArray(response.content);
+    if (!content) return null;
+    return content
+      .map((b) => asDict(b))
+      .filter((b): b is Dict => b !== null && asString(b.type) === 'tool_use')
+      .map((b) => ({ name: asString(b.name) ?? 'unknown', detail: summarizeToolInput(b.input) }));
+  }
+
+  if (providerName === 'gemini') {
+    const candidates = asArray(response.candidates);
+    if (!candidates) return null;
+    const details: ToolCallDetail[] = [];
+    for (const candidate of candidates) {
+      const parts = asArray(asDict(asDict(candidate)?.content)?.parts) ?? [];
+      for (const part of parts) {
+        const call = asDict(asDict(part)?.functionCall);
+        if (call) details.push({ name: asString(call.name) ?? 'unknown', detail: summarizeToolInput(call.args) });
+      }
+    }
+    return details;
+  }
+
+  // OpenAI chat completions (also OpenRouter)
+  const choices = asArray(response.choices);
+  if (choices) {
+    const details: ToolCallDetail[] = [];
+    for (const choice of choices) {
+      const calls = asArray(asDict(asDict(choice)?.message)?.tool_calls) ?? [];
+      for (const call of calls) {
+        const fn = asDict(asDict(call)?.function);
+        details.push({
+          name: (fn && asString(fn.name)) ?? 'unknown',
+          detail: fn ? summarizeToolInput(parseJsonArguments(fn.arguments)) : null,
+        });
+      }
+    }
+    return details;
+  }
+
+  // OpenAI Responses API
+  const output = asArray(response.output);
+  if (output) {
+    return output
+      .map((item) => asDict(item))
+      .filter((item): item is Dict => item !== null && asString(item.type) === 'function_call')
+      .map((item) => ({
+        name: asString(item.name) ?? 'unknown',
+        detail: summarizeToolInput(parseJsonArguments(item.arguments)),
+      }));
+  }
+
+  return null;
+}
+
+const RESPONSE_SNIPPET_MAX_CHARS = 280;
+
+/** Leading assistant text of the response — what the model said, for at-a-glance timelines. */
+export function extractResponseSnippet(providerName: string, responseBody: unknown): string | null {
+  const response = asDict(responseBody);
+  if (!response) return null;
+
+  let text = '';
+
+  if (providerName === 'anthropic') {
+    const content = asArray(response.content) ?? [];
+    text = content
+      .map((b) => asDict(b))
+      .filter((b): b is Dict => b !== null && asString(b.type) === 'text')
+      .map((b) => asString(b.text) ?? '')
+      .join('\n');
+  } else if (providerName === 'gemini') {
+    const parts = asArray(asDict(asDict(asArray(response.candidates)?.[0])?.content)?.parts) ?? [];
+    text = parts
+      .map((p) => asDict(p))
+      // thought parts are reasoning, not the reply
+      .filter((p): p is Dict => p !== null && !p.functionCall && p.thought !== true)
+      .map((p) => asString(p.text) ?? '')
+      .filter(Boolean)
+      .join('\n');
+  } else {
+    // OpenAI chat completions
+    const choices = asArray(response.choices);
+    if (choices) {
+      text = contentToText(asDict(asDict(choices[0])?.message)?.content);
+    } else {
+      // OpenAI Responses API
+      const output = asArray(response.output) ?? [];
+      text = output
+        .map((item) => asDict(item))
+        .filter((item): item is Dict => item !== null && asString(item.type) === 'message')
+        .flatMap((item) => asArray(item.content) ?? [])
+        .map((part) => asDict(part))
+        .filter((part): part is Dict => part !== null && asString(part.type) === 'output_text')
+        .map((part) => asString(part.text) ?? '')
+        .join('\n');
+    }
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  return trimmed.length > RESPONSE_SNIPPET_MAX_CHARS
+    ? `${trimmed.slice(0, RESPONSE_SNIPPET_MAX_CHARS)}…`
+    : trimmed;
+}
+
+/**
+ * Leading reasoning/thinking text of the response — what the model thought
+ * before acting. Null when the provider exposes none (e.g. encrypted-only
+ * reasoning items without summaries).
+ */
+export function extractReasoningSnippet(providerName: string, responseBody: unknown): string | null {
+  const response = asDict(responseBody);
+  if (!response) return null;
+
+  let text = '';
+
+  if (providerName === 'anthropic') {
+    const content = asArray(response.content) ?? [];
+    text = content
+      .map((b) => asDict(b))
+      .filter((b): b is Dict => b !== null && asString(b.type) === 'thinking')
+      .map((b) => asString(b.thinking) ?? '')
+      .join('\n');
+  } else if (providerName === 'gemini') {
+    const parts = asArray(asDict(asDict(asArray(response.candidates)?.[0])?.content)?.parts) ?? [];
+    text = parts
+      .map((p) => asDict(p))
+      .filter((p): p is Dict => p !== null && p.thought === true)
+      .map((p) => asString(p.text) ?? '')
+      .filter(Boolean)
+      .join('\n');
+  } else {
+    // OpenAI chat completions (and OpenRouter/DeepSeek variants)
+    const choices = asArray(response.choices);
+    if (choices) {
+      const message = asDict(asDict(choices[0])?.message);
+      text = asString(message?.reasoning) ?? asString(message?.reasoning_content) ?? '';
+    } else {
+      // OpenAI Responses API: reasoning items expose only their summary text
+      const output = asArray(response.output) ?? [];
+      text = output
+        .map((item) => asDict(item))
+        .filter((item): item is Dict => item !== null && asString(item.type) === 'reasoning')
+        .flatMap((item) => asArray(item.summary) ?? [])
+        .map((part) => asString(asDict(part)?.text) ?? '')
+        .filter(Boolean)
+        .join('\n');
+    }
+  }
+
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  return trimmed.length > RESPONSE_SNIPPET_MAX_CHARS
+    ? `${trimmed.slice(0, RESPONSE_SNIPPET_MAX_CHARS)}…`
+    : trimmed;
+}
+
 export function extractAgentMeta(
   providerName: string,
   requestBody: unknown,
